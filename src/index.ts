@@ -3,23 +3,24 @@ import type { Env } from "./env";
 import { verifyToken } from "./seatable";
 import { loginPage, type AuthorizeParams } from "./views";
 import {
-  consumeAuthCode,
   createAuthCode,
   deleteAccessTokenByValue,
   getAccessToken,
-  getAuthCode,
   getClient,
   getRefreshToken,
-  issueTokens,
   redirectUriAllowed,
   revokeRefreshToken,
   type ClientRow,
 } from "./db";
-import { now, sha256Hex, timingSafeEqual, verifyPkceS256 } from "./oauth";
+import { redeemAuthCode, redeemRefreshToken, type GrantResult } from "./grants";
+import { sha256Hex, timingSafeEqual } from "./oauth";
+import consoleApp from "./console";
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.get("/", (c) => c.text("authserver: OAuth 2.0 (authorization_code + PKCE)\n"));
+app.route("/console", consoleApp);
+
+app.get("/", (c) => c.redirect("/console"));
 
 function redirectError(
   redirectUri: string,
@@ -170,35 +171,30 @@ app.post("/token", async (c) => {
   if (!(await authenticateClient(client, clientSecret))) return jsonError(401, "invalid_client");
 
   if (grantType === "authorization_code") {
-    const row = await getAuthCode(c.env, form.code ?? "");
-    if (!row || row.used === 1 || row.expires_at <= now()) {
-      return jsonError(400, "invalid_grant", "Authorization code is invalid or expired");
-    }
-    if (row.client_id !== clientId || row.redirect_uri !== (form.redirect_uri ?? "")) {
-      return jsonError(400, "invalid_grant", "client_id / redirect_uri mismatch");
-    }
-    if (!(await verifyPkceS256(form.code_verifier ?? "", row.code_challenge))) {
-      return jsonError(400, "invalid_grant", "PKCE verification failed");
-    }
-    if (!(await consumeAuthCode(c.env, row.code_hash))) {
-      return jsonError(400, "invalid_grant", "Authorization code already used");
-    }
-    const tokens = await issueTokens(c.env, { clientId, userId: row.user_id, scope: row.scope });
-    return tokenResponse(tokens, row.scope);
+    const result = await redeemAuthCode(c.env, {
+      clientId,
+      code: form.code ?? "",
+      redirectUri: form.redirect_uri ?? "",
+      codeVerifier: form.code_verifier ?? "",
+    });
+    return grantResponse(result);
   }
 
   if (grantType === "refresh_token") {
-    const row = await getRefreshToken(c.env, form.refresh_token ?? "");
-    if (!row || row.revoked === 1 || row.expires_at <= now() || row.client_id !== clientId) {
-      return jsonError(400, "invalid_grant", "Refresh token is invalid or expired");
-    }
-    await revokeRefreshToken(c.env, row.token_hash);
-    const tokens = await issueTokens(c.env, { clientId, userId: row.user_id, scope: row.scope });
-    return tokenResponse(tokens, row.scope);
+    const result = await redeemRefreshToken(c.env, {
+      clientId,
+      refreshToken: form.refresh_token ?? "",
+    });
+    return grantResponse(result);
   }
 
   return jsonError(400, "unsupported_grant_type");
 });
+
+function grantResponse(result: GrantResult): Response {
+  if (!result.ok) return jsonError(400, result.error, result.description);
+  return tokenResponse(result.tokens, result.scope);
+}
 
 function tokenResponse(
   tokens: { accessToken: string; refreshToken: string; accessExpiresIn: number },

@@ -38,16 +38,32 @@ npx wrangler secret put SEATABLE_API_TOKEN
 npx wrangler deploy
 ```
 
-## 注册客户端
+## 管理后台(自助注册客户端)
 
-客户端需手动写入 D1。`redirect_uris` 为换行分隔的白名单,**精确匹配**。
+后台地址 `/console`。任何能用 SeaTable Token 登录的人都可以自助注册 / 编辑 / 删除**自己名下的**
+客户端,数量不限。后台自身是本服务的第一方 OAuth 客户端(`__console__`),登录走完整
+`/authorize → /token`(PKCE)流程,access token 存进 httpOnly cookie。
 
-公开客户端(仅 PKCE、无密钥,如 SPA / 移动端 / CLI):
+- 浏览器打开 `/console` → 跳登录 → 粘贴 Token → 进入「我的应用」。
+- 新建应用时选**公开**(仅 PKCE)或**机密**(带密钥,密钥仅创建/轮换时展示一次)。
+- `redirect_uris` 为换行分隔的白名单,**精确匹配**。
+
+> `__console__` 客户端由迁移 `0002_console.sql` 自动播种,默认 `redirect_uris` 为
+> `http://localhost:8787/console/callback`。**上线后**需把该行改成线上域名:
+>
+> ```bash
+> npx wrangler d1 execute authserver-db --remote --command \
+>   "UPDATE clients SET redirect_uris = 'https://你的域名/console/callback' WHERE client_id = '__console__';"
+> ```
+
+### 也可用 CLI 手动注册
+
+公开客户端(无密钥):
 
 ```bash
 npx wrangler d1 execute authserver-db --local --command \
-  "INSERT INTO clients (client_id, client_secret_hash, name, redirect_uris, created_at)
-   VALUES ('demo-client', NULL, 'Demo App', 'http://localhost:8788/callback', unixepoch());"
+  "INSERT INTO clients (client_id, client_secret_hash, name, redirect_uris, owner_id, created_at)
+   VALUES ('demo-client', NULL, 'Demo App', 'http://localhost:8788/callback', NULL, unixepoch());"
 ```
 
 机密客户端需存密钥的 SHA-256 十六进制:
@@ -55,8 +71,8 @@ npx wrangler d1 execute authserver-db --local --command \
 ```bash
 HASH=$(printf '%s' "你的密钥" | shasum -a 256 | cut -d' ' -f1)
 npx wrangler d1 execute authserver-db --local --command \
-  "INSERT INTO clients (client_id, client_secret_hash, name, redirect_uris, created_at)
-   VALUES ('web-app', '$HASH', 'Web App', 'http://localhost:8788/callback', unixepoch());"
+  "INSERT INTO clients (client_id, client_secret_hash, name, redirect_uris, owner_id, created_at)
+   VALUES ('web-app', '$HASH', 'Web App', 'http://localhost:8788/callback', NULL, unixepoch());"
 ```
 
 ## 本地联调
@@ -95,12 +111,16 @@ curl -s http://localhost:8787/token \
 
 ```
 src/
-  index.ts       路由(authorize / token / introspect / revoke)
-  oauth.ts       哈希、随机 token、PKCE、有效期
-  db.ts          D1 读写
-  seatable.ts    SeaTable Token 校验
-  views.ts       登录页 HTML
-  env.ts         绑定类型
+  index.ts          路由(authorize / token / introspect / revoke),挂载 /console
+  grants.ts         授权码 / refresh token 兑换逻辑(被 /token 与后台共用)
+  console.ts        管理后台路由(登录 / 回调 / 退出 + 应用增删改查)
+  console_views.ts  后台页面 HTML
+  oauth.ts          哈希、随机 token、PKCE、有效期
+  db.ts             D1 读写 + 客户端管理
+  seatable.ts       SeaTable Token 校验
+  views.ts          登录页 HTML
+  env.ts            绑定类型
 migrations/
-  0001_init.sql  D1 建表
+  0001_init.sql     D1 建表
+  0002_console.sql  客户端归属 + 后台客户端播种
 ```
