@@ -109,10 +109,10 @@ app.get("/authorize", async (c) => {
   // Errors involving client_id / redirect_uri must NOT redirect (RFC 6749 §4.1.2.1).
   const client = clientId ? await getClient(c.env, clientId) : null;
   if (!client) {
-    return c.html("<h1>Invalid client_id</h1>", 400);
+    return c.html("<h1>无效的 client_id</h1>", 400);
   }
   if (!redirectUri || !redirectUriAllowed(client, redirectUri)) {
-    return c.html("<h1>Invalid redirect_uri</h1>", 400);
+    return c.html("<h1>无效的 redirect_uri</h1>", 400);
   }
 
   // From here on, errors can be reported back to the client via redirect.
@@ -153,7 +153,7 @@ app.post("/authorize", async (c) => {
 
   const client = clientId ? await getClient(c.env, clientId) : null;
   if (!client || !redirectUri || !redirectUriAllowed(client, redirectUri)) {
-    return c.html("<h1>Invalid client or redirect_uri</h1>", 400);
+    return c.html("<h1>无效的 client 或 redirect_uri</h1>", 400);
   }
   if (!codeChallenge || codeChallengeMethod !== "S256") {
     return redirectError(redirectUri, "invalid_request", state, "PKCE required");
@@ -172,11 +172,11 @@ app.post("/authorize", async (c) => {
   try {
     userId = await verifyToken(c.env, token);
   } catch {
-    return c.html(loginPage(params, client.name, "Authorization service unavailable. Try again."), 502);
+    return c.html(loginPage(params, client.name, "授权服务暂时不可用，请稍后重试。"), 502);
   }
 
   if (!userId) {
-    return c.html(loginPage(params, client.name, "Invalid token. Please check and try again."), 401);
+    return c.html(loginPage(params, client.name, "Token 无效，请检查后重试。"), 401);
   }
 
   const code = await createAuthCode(c.env, {
