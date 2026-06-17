@@ -1,6 +1,3 @@
-// Minimal server-rendered HTML for the login/consent step of /authorize.
-
-/** Escape a string for safe interpolation into HTML attributes/text. */
 export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -19,10 +16,6 @@ export interface AuthorizeParams {
   code_challenge_method: string;
 }
 
-/**
- * The login + consent page. The user pastes their SeaTable Token; all OAuth
- * parameters are carried forward as hidden fields and POSTed back to /authorize.
- */
 export function loginPage(
   params: AuthorizeParams,
   clientName: string,

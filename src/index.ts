@@ -1,11 +1,3 @@
-// OAuth 2.0 Authorization Server (Authorization Code + PKCE) on Cloudflare Workers.
-//
-// Endpoints:
-//   GET  /authorize   -> login page (validates client + PKCE)
-//   POST /authorize   -> verify token via SeaTable, issue auth code, redirect back
-//   POST /token       -> exchange code (or refresh token) for opaque tokens
-//   POST /introspect  -> resource servers validate an access token
-//   POST /revoke      -> revoke an access or refresh token
 import { Hono } from "hono";
 import type { Env } from "./env";
 import { verifyToken } from "./seatable";
@@ -29,9 +21,6 @@ const app = new Hono<{ Bindings: Env }>();
 
 app.get("/", (c) => c.text("authserver: OAuth 2.0 (authorization_code + PKCE)\n"));
 
-// ---- helpers --------------------------------------------------------------
-
-/** Append OAuth error params to a redirect URI and return a 302 response. */
 function redirectError(
   redirectUri: string,
   error: string,
@@ -52,23 +41,16 @@ function jsonError(status: number, error: string, description?: string): Respons
   );
 }
 
-/**
- * Authenticate the client on the token endpoint.
- *  - confidential clients (client_secret_hash set) MUST present a matching secret
- *  - public clients (no secret) rely solely on PKCE
- * Returns true if the request is authorized to act as `client`.
- */
+// Public clients (no secret) rely on PKCE; confidential clients must match their secret.
 async function authenticateClient(
   client: ClientRow,
   presentedSecret: string | null,
 ): Promise<boolean> {
-  if (!client.client_secret_hash) return true; // public client
+  if (!client.client_secret_hash) return true;
   if (!presentedSecret) return false;
-  const hash = await sha256Hex(presentedSecret);
-  return timingSafeEqual(hash, client.client_secret_hash);
+  return timingSafeEqual(await sha256Hex(presentedSecret), client.client_secret_hash);
 }
 
-/** Read client_secret from form body or HTTP Basic auth header. */
 function extractClientCredentials(
   req: Request,
   form: Record<string, string>,
@@ -85,22 +67,16 @@ function extractClientCredentials(
         };
       }
     } catch {
-      /* fall through to form-based credentials */
+      /* fall through to form credentials */
     }
   }
-  return {
-    clientId: form.client_id ?? null,
-    clientSecret: form.client_secret ?? null,
-  };
+  return { clientId: form.client_id ?? null, clientSecret: form.client_secret ?? null };
 }
-
-// ---- GET /authorize -------------------------------------------------------
 
 app.get("/authorize", async (c) => {
   const q = c.req.query();
   const clientId = q.client_id ?? "";
   const redirectUri = q.redirect_uri ?? "";
-  const responseType = q.response_type ?? "";
   const state = q.state ?? "";
   const scope = q.scope ?? "";
   const codeChallenge = q.code_challenge ?? "";
@@ -108,24 +84,16 @@ app.get("/authorize", async (c) => {
 
   // Errors involving client_id / redirect_uri must NOT redirect (RFC 6749 §4.1.2.1).
   const client = clientId ? await getClient(c.env, clientId) : null;
-  if (!client) {
-    return c.html("<h1>无效的 client_id</h1>", 400);
-  }
+  if (!client) return c.html("<h1>无效的 client_id</h1>", 400);
   if (!redirectUri || !redirectUriAllowed(client, redirectUri)) {
     return c.html("<h1>无效的 redirect_uri</h1>", 400);
   }
 
-  // From here on, errors can be reported back to the client via redirect.
-  if (responseType !== "code") {
+  if ((q.response_type ?? "") !== "code") {
     return redirectError(redirectUri, "unsupported_response_type", state);
   }
   if (!codeChallenge || codeChallengeMethod !== "S256") {
-    return redirectError(
-      redirectUri,
-      "invalid_request",
-      state,
-      "PKCE with code_challenge_method=S256 is required",
-    );
+    return redirectError(redirectUri, "invalid_request", state, "PKCE (S256) is required");
   }
 
   const params: AuthorizeParams = {
@@ -139,8 +107,6 @@ app.get("/authorize", async (c) => {
   return c.html(loginPage(params, client.name));
 });
 
-// ---- POST /authorize (login submit) --------------------------------------
-
 app.post("/authorize", async (c) => {
   const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
   const clientId = form.client_id ?? "";
@@ -149,7 +115,6 @@ app.post("/authorize", async (c) => {
   const scope = form.scope ?? "";
   const codeChallenge = form.code_challenge ?? "";
   const codeChallengeMethod = form.code_challenge_method ?? "";
-  const token = form.token ?? "";
 
   const client = clientId ? await getClient(c.env, clientId) : null;
   if (!client || !redirectUri || !redirectUriAllowed(client, redirectUri)) {
@@ -170,11 +135,10 @@ app.post("/authorize", async (c) => {
 
   let userId: string | null;
   try {
-    userId = await verifyToken(c.env, token);
+    userId = await verifyToken(c.env, form.token ?? "");
   } catch {
     return c.html(loginPage(params, client.name, "授权服务暂时不可用，请稍后重试。"), 502);
   }
-
   if (!userId) {
     return c.html(loginPage(params, client.name, "Token 无效，请检查后重试。"), 401);
   }
@@ -194,8 +158,6 @@ app.post("/authorize", async (c) => {
   return Response.redirect(u.toString(), 302);
 });
 
-// ---- POST /token ----------------------------------------------------------
-
 app.post("/token", async (c) => {
   const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
   const grantType = form.grant_type ?? "";
@@ -205,51 +167,33 @@ app.post("/token", async (c) => {
 
   const client = await getClient(c.env, clientId);
   if (!client) return jsonError(401, "invalid_client");
-  if (!(await authenticateClient(client, clientSecret))) {
-    return jsonError(401, "invalid_client");
-  }
+  if (!(await authenticateClient(client, clientSecret))) return jsonError(401, "invalid_client");
 
   if (grantType === "authorization_code") {
-    const code = form.code ?? "";
-    const redirectUri = form.redirect_uri ?? "";
-    const codeVerifier = form.code_verifier ?? "";
-
-    const row = await getAuthCode(c.env, code);
+    const row = await getAuthCode(c.env, form.code ?? "");
     if (!row || row.used === 1 || row.expires_at <= now()) {
       return jsonError(400, "invalid_grant", "Authorization code is invalid or expired");
     }
-    if (row.client_id !== clientId || row.redirect_uri !== redirectUri) {
+    if (row.client_id !== clientId || row.redirect_uri !== (form.redirect_uri ?? "")) {
       return jsonError(400, "invalid_grant", "client_id / redirect_uri mismatch");
     }
-    if (!(await verifyPkceS256(codeVerifier, row.code_challenge))) {
+    if (!(await verifyPkceS256(form.code_verifier ?? "", row.code_challenge))) {
       return jsonError(400, "invalid_grant", "PKCE verification failed");
     }
-    // Atomic single-use guard against replay.
     if (!(await consumeAuthCode(c.env, row.code_hash))) {
       return jsonError(400, "invalid_grant", "Authorization code already used");
     }
-
-    const tokens = await issueTokens(c.env, {
-      clientId,
-      userId: row.user_id,
-      scope: row.scope,
-    });
+    const tokens = await issueTokens(c.env, { clientId, userId: row.user_id, scope: row.scope });
     return tokenResponse(tokens, row.scope);
   }
 
   if (grantType === "refresh_token") {
-    const refreshToken = form.refresh_token ?? "";
-    const row = await getRefreshToken(c.env, refreshToken);
+    const row = await getRefreshToken(c.env, form.refresh_token ?? "");
     if (!row || row.revoked === 1 || row.expires_at <= now() || row.client_id !== clientId) {
       return jsonError(400, "invalid_grant", "Refresh token is invalid or expired");
     }
-    // Rotate: revoke the presented refresh token, issue a fresh pair.
     await revokeRefreshToken(c.env, row.token_hash);
-    const tokens = await issueTokens(c.env, {
-      clientId,
-      userId: row.user_id,
-      scope: row.scope,
-    });
+    const tokens = await issueTokens(c.env, { clientId, userId: row.user_id, scope: row.scope });
     return tokenResponse(tokens, row.scope);
   }
 
@@ -272,15 +216,11 @@ function tokenResponse(
   );
 }
 
-// ---- POST /introspect (RFC 7662, simplified) -----------------------------
-
 app.post("/introspect", async (c) => {
   const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
   const token = form.token ?? "";
   const row = token ? await getAccessToken(c.env, token) : null;
-  if (!row) {
-    return c.json({ active: false });
-  }
+  if (!row) return c.json({ active: false });
   return c.json({
     active: true,
     client_id: row.client_id,
@@ -292,19 +232,13 @@ app.post("/introspect", async (c) => {
   });
 });
 
-// ---- POST /revoke (RFC 7009) ---------------------------------------------
-
 app.post("/revoke", async (c) => {
   const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
   const token = form.token ?? "";
   if (token) {
-    // Try as refresh token first, then as access token. Always return 200.
     const refresh = await getRefreshToken(c.env, token);
-    if (refresh) {
-      await revokeRefreshToken(c.env, refresh.token_hash);
-    } else {
-      await deleteAccessTokenByValue(c.env, token);
-    }
+    if (refresh) await revokeRefreshToken(c.env, refresh.token_hash);
+    else await deleteAccessTokenByValue(c.env, token);
   }
   return c.body(null, 200);
 });
