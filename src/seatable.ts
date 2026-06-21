@@ -1,4 +1,5 @@
 import type { Env } from "./env";
+import { sha256Hex } from "./crypto";
 
 const TABLE_NAME = "Table1";
 const ID_COL = "ID";
@@ -32,27 +33,44 @@ async function getBaseToken(env: Env): Promise<BaseToken> {
   return value;
 }
 
-export async function verifyUser(env: Env, token: string): Promise<SeatableUser | null> {
-  if (!token.trim()) return null;
-
+async function queryRow(
+  env: Env,
+  sql: string,
+  parameters: unknown[],
+): Promise<Record<string, unknown> | null> {
   const base = await getBaseToken(env);
   const url = `${env.SEATABLE_SERVER_URL.replace(/\/$/, "")}/api-gateway/api/v2/dtables/${base.dtableUuid}/sql/`;
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${base.accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sql: `SELECT \`${ID_COL}\`, \`${NAME_COL}\` FROM \`${TABLE_NAME}\` WHERE \`${TOKEN_COL}\` = ? LIMIT 1`,
-      parameters: [token],
-      convert_keys: true,
-    }),
+    body: JSON.stringify({ sql, parameters, convert_keys: true }),
   });
   if (!res.ok) throw new Error(`SeaTable SQL query failed: ${res.status}`);
-
   const data = (await res.json()) as { results?: Array<Record<string, unknown>> };
-  const row = data.results?.[0];
-  if (!row) return null;
-  const id = row[ID_COL] == null ? "" : String(row[ID_COL]).trim();
+  return data.results?.[0] ?? null;
+}
+
+export async function verifyUser(env: Env, token: string): Promise<SeatableUser | null> {
+  if (!token.trim()) return null;
+  const row = await queryRow(
+    env,
+    `SELECT \`${ID_COL}\`, \`${NAME_COL}\` FROM \`${TABLE_NAME}\` WHERE \`${TOKEN_COL}\` = ? LIMIT 1`,
+    [token],
+  );
+  const id = row?.[ID_COL] == null ? "" : String(row[ID_COL]).trim();
   if (!id) return null;
-  const name = row[NAME_COL] == null ? "" : String(row[NAME_COL]).trim();
+  const name = row?.[NAME_COL] == null ? "" : String(row[NAME_COL]).trim();
   return { id, name };
+}
+
+// Fingerprint of a user's current SeaTable token, by ID. Used to detect token
+// rotation at refresh time. Returns null if the user has no token / no row.
+export async function currentTokenHash(env: Env, userId: string): Promise<string | null> {
+  const row = await queryRow(
+    env,
+    `SELECT \`${TOKEN_COL}\` FROM \`${TABLE_NAME}\` WHERE \`${ID_COL}\` = ? LIMIT 1`,
+    [userId],
+  );
+  const token = row?.[TOKEN_COL] == null ? "" : String(row[TOKEN_COL]).trim();
+  return token ? sha256Hex(token) : null;
 }

@@ -32,8 +32,20 @@
 ## 身份源
 
 SeaTable `Table1` 作为身份源：登录时用户粘贴自己的 **Token**，服务端去 `Table1` 校验，命中则取该行的
-**`ID`**（身份 `user_id`）与 **`Name`**（展示名）。不往 SeaTable 写任何东西。
-[`generate_token.py`](../generate_token.py) 负责往 `Table1` 灌 Token，本服务只读校验。
+**`ID`**（身份 `sub`）与 **`Name`**（展示名）。不往 SeaTable 写任何东西。
+[`generate_token.py`](../generate_token.py) 负责往 `Table1` 灌 / 轮换 Token，本服务只读校验。
+
+## 轮换与令牌失效
+
+OAuth 令牌与 SeaTable Token 无关，单纯轮换 Token 不会立刻使已签发的令牌失效。为此在**刷新**时做校验：
+
+- 登录签发授权时，把当时 Token 的指纹 `sha256(token)` 记进 grant 的 `props`（`tokenHash`，不随 `/userinfo` 外泄）。
+- 每次 `refresh_token` 兑换，经库的 `tokenExchangeCallback` 回查该用户在 `Table1` 的当前 Token 指纹，
+  与 `tokenHash` 比对：不一致（含该用户已无 Token）→ 抛 `invalid_grant` 拒绝刷新。
+
+效果：轮换后旧会话在 access token 过期（默认 ≤1 小时）后无法续期而终止。**轮换前已签发的 access token 在其
+有效期内仍可用**，非即时；如需更快收敛可调小 `accessTokenTTL`。SeaTable 不可达时刷新放行（fail-open），
+不把可用性耦合到 SeaTable。控制台自签名会话（7 天）与此机制无关，不受影响。
 
 ## 数据存储
 

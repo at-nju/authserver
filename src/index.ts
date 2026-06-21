@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import { OAuthProvider, type AuthRequest } from "@cloudflare/workers-oauth-provider";
+import { OAuthProvider, OAuthError, GrantType, type AuthRequest } from "@cloudflare/workers-oauth-provider";
 import type { Env } from "./env";
-import { verifyUser } from "./seatable";
-import { signBlob, verifyBlob } from "./crypto";
+import { verifyUser, currentTokenHash } from "./seatable";
+import { signBlob, verifyBlob, sha256Hex } from "./crypto";
 import { loginPage } from "./views";
 import { userInfoHandler } from "./userinfo";
 import consoleApp from "./console";
@@ -64,17 +64,41 @@ app.post("/authorize", async (c) => {
     return c.html(authorizePage("/authorize", appName, blob, "Token 无效，请检查后重试。"), 401);
   }
 
+  const tokenHash = await sha256Hex(form.token ?? "");
   const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
     request: authReq,
     userId: user.id,
     metadata: {},
     scope: authReq.scope,
-    props: { userId: user.id, name: user.name },
+    props: { userId: user.id, name: user.name, tokenHash },
   });
   return c.redirect(redirectTo);
 });
 
-export default new OAuthProvider({
+// tokenExchangeCallback gets no env, so capture it here. env is stable across
+// requests, making this module-level reference safe.
+let envRef: Env | undefined;
+
+// On refresh, reject if the user's SeaTable token no longer matches the one
+// present at login — i.e. it was rotated. Fail open if SeaTable is unreachable.
+async function rejectIfTokenRotated(options: {
+  grantType: GrantType;
+  userId: string;
+  props: { tokenHash?: string };
+}) {
+  if (options.grantType !== GrantType.REFRESH_TOKEN || !envRef) return;
+  let current: string | null;
+  try {
+    current = await currentTokenHash(envRef, options.userId);
+  } catch {
+    return;
+  }
+  if (current !== options.props?.tokenHash) {
+    throw new OAuthError("invalid_grant", { description: "SeaTable token 已轮换，请重新登录。" });
+  }
+}
+
+const provider = new OAuthProvider({
   apiRoute: "/userinfo",
   apiHandler: userInfoHandler,
   defaultHandler: app,
@@ -84,4 +108,12 @@ export default new OAuthProvider({
   clientRegistrationTTL: undefined,
   allowImplicitFlow: false,
   allowPlainPKCE: false,
+  tokenExchangeCallback: rejectIfTokenRotated,
 });
+
+export default {
+  fetch(request: Request, env: Env, ctx: ExecutionContext): Response | Promise<Response> {
+    envRef = env;
+    return provider.fetch(request, env, ctx);
+  },
+};
