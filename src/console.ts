@@ -1,32 +1,25 @@
 import { Hono, type Context, type Next } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import type { ClientInfo } from "@cloudflare/workers-oauth-provider";
 import type { Env } from "./env";
-import {
-  createManagedClient,
-  deleteAccessTokenByValue,
-  deleteOwnedClient,
-  getAccessToken,
-  getOwnedClient,
-  getRefreshToken,
-  listClientsByOwner,
-  revokeRefreshToken,
-  rotateClientSecret,
-  updateOwnedClient,
-} from "./db";
-import { redeemAuthCode, redeemRefreshToken } from "./grants";
-import { randomToken, sha256Base64url } from "./oauth";
-import {
-  appsPage,
-  editAppPage,
-  newAppPage,
-  secretRevealPage,
-} from "./console_views";
+import { randomToken, signBlob, verifyBlob } from "./crypto";
+import { verifyUser } from "./seatable";
+import { addOwnership, listClientIds, ownerOf, removeOwnership } from "./ownership";
+import { loginPage } from "./views";
+import { appsPage, editAppPage, newAppPage, secretRevealPage } from "./console_views";
 
-const CONSOLE_CLIENT_ID = "__console__";
 const SESSION_COOKIE = "session";
-const TX_COOKIE = "oauth_tx";
+const SESSION_TTL = 60 * 60 * 24 * 7;
+const LOGIN_TITLE = "管理后台登录";
+const LOGIN_SUBTITLE = "登录以管理你的 OAuth 应用，请粘贴你的 Token 以继续。";
 
-type Vars = { userId: string };
+interface Session {
+  userId: string;
+  name: string;
+  exp: number;
+}
+
+type Vars = { session: Session };
 type Ctx = Context<{ Bindings: Env; Variables: Vars }>;
 
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -40,14 +33,19 @@ function cookieOpts(c: Ctx) {
   };
 }
 
-function setSession(c: Ctx, access: string, refresh: string) {
-  setCookie(c, SESSION_COOKIE, `${access}|${refresh}`, {
-    ...cookieOpts(c),
-    maxAge: 60 * 60 * 24 * 30,
-  });
+function nowSec(): number {
+  return Math.floor(Date.now() / 1000);
 }
 
-function normalizeUris(raw: string): string | null {
+function userLabel(s: Session): string {
+  return s.name || s.userId;
+}
+
+function consoleLoginPage(error?: string) {
+  return loginPage({ action: "/console/login", title: LOGIN_TITLE, subtitle: LOGIN_SUBTITLE, error });
+}
+
+function normalizeUris(raw: string): string[] | null {
   const lines = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   if (!lines.length) return null;
   for (const l of lines) {
@@ -57,156 +55,121 @@ function normalizeUris(raw: string): string | null {
       return null;
     }
   }
-  return lines.join("\n");
+  return lines;
 }
 
-// Resolve the logged-in user from the session cookie, refreshing if needed.
-// Only tokens issued to the console client itself grant management access.
 async function requireSession(c: Ctx, next: Next) {
-  const sess = getCookie(c, SESSION_COOKIE);
-  if (!sess) return c.redirect("/console/login");
-  const [access, refresh] = sess.split("|");
-
-  const row = access ? await getAccessToken(c.env, access) : null;
-  if (row && row.client_id === CONSOLE_CLIENT_ID) {
-    c.set("userId", row.user_id);
-    return next();
+  const raw = getCookie(c, SESSION_COOKIE);
+  const session = raw ? await verifyBlob<Session>(c.env.CONSOLE_SESSION_SECRET, raw) : null;
+  if (!session || session.exp < nowSec()) {
+    deleteCookie(c, SESSION_COOKIE, { path: "/console" });
+    return c.redirect("/console/login");
   }
+  c.set("session", session);
+  return next();
+}
 
-  if (refresh) {
-    const r = await redeemRefreshToken(c.env, { clientId: CONSOLE_CLIENT_ID, refreshToken: refresh });
-    if (r.ok) {
-      setSession(c, r.tokens.accessToken, r.tokens.refreshToken);
-      const fresh = await getAccessToken(c.env, r.tokens.accessToken);
-      if (fresh) {
-        c.set("userId", fresh.user_id);
-        return next();
-      }
-    }
-  }
-
-  deleteCookie(c, SESSION_COOKIE, { path: "/console" });
-  return c.redirect("/console/login");
+async function getOwnedClient(c: Ctx, clientId: string): Promise<ClientInfo | null> {
+  if ((await ownerOf(c.env, clientId)) !== c.get("session").userId) return null;
+  return c.env.OAUTH_PROVIDER.lookupClient(clientId);
 }
 
 app.get("/", (c) => c.redirect("/console/apps"));
 
-app.get("/login", async (c) => {
-  const verifier = randomToken();
-  const challenge = await sha256Base64url(verifier);
-  const state = randomToken();
-  setCookie(c, TX_COOKIE, `${verifier}|${state}`, { ...cookieOpts(c), maxAge: 600 });
+app.get("/login", (c) => c.html(consoleLoginPage()));
 
-  const origin = new URL(c.req.url).origin;
-  const u = new URL(`${origin}/authorize`);
-  u.searchParams.set("response_type", "code");
-  u.searchParams.set("client_id", CONSOLE_CLIENT_ID);
-  u.searchParams.set("redirect_uri", `${origin}/console/callback`);
-  u.searchParams.set("code_challenge", challenge);
-  u.searchParams.set("code_challenge_method", "S256");
-  u.searchParams.set("state", state);
-  u.searchParams.set("scope", "manage");
-  return c.redirect(u.toString());
-});
-
-app.get("/callback", async (c) => {
-  const code = c.req.query("code") ?? "";
-  const state = c.req.query("state") ?? "";
-  const tx = getCookie(c, TX_COOKIE) ?? "";
-  deleteCookie(c, TX_COOKIE, { path: "/console" });
-  const [verifier, expectedState] = tx.split("|");
-  if (!code || !verifier || !state || state !== expectedState) {
-    return c.text("登录失败，请重试。", 400);
+app.post("/login", async (c) => {
+  const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
+  let user;
+  try {
+    user = await verifyUser(c.env, form.token ?? "");
+  } catch {
+    return c.html(consoleLoginPage("授权服务暂时不可用，请稍后重试。"), 502);
   }
+  if (!user) return c.html(consoleLoginPage("Token 无效，请检查后重试。"), 401);
 
-  const origin = new URL(c.req.url).origin;
-  const result = await redeemAuthCode(c.env, {
-    clientId: CONSOLE_CLIENT_ID,
-    code,
-    redirectUri: `${origin}/console/callback`,
-    codeVerifier: verifier,
-  });
-  if (!result.ok) return c.text(`登录失败：${result.error}`, 400);
-
-  setSession(c, result.tokens.accessToken, result.tokens.refreshToken);
+  const session: Session = { userId: user.id, name: user.name, exp: nowSec() + SESSION_TTL };
+  const cookie = await signBlob(c.env.CONSOLE_SESSION_SECRET, session);
+  setCookie(c, SESSION_COOKIE, cookie, { ...cookieOpts(c), maxAge: SESSION_TTL });
   return c.redirect("/console/apps");
 });
 
-app.post("/logout", async (c) => {
-  const sess = getCookie(c, SESSION_COOKIE);
-  if (sess) {
-    const [access, refresh] = sess.split("|");
-    if (refresh) {
-      const r = await getRefreshToken(c.env, refresh);
-      if (r) await revokeRefreshToken(c.env, r.token_hash);
-    }
-    if (access) await deleteAccessTokenByValue(c.env, access);
-  }
+app.post("/logout", (c) => {
   deleteCookie(c, SESSION_COOKIE, { path: "/console" });
   return c.redirect("/console/login");
 });
 
 app.get("/apps", requireSession, async (c) => {
-  const userId = c.get("userId");
-  const clients = await listClientsByOwner(c.env, userId);
-  return c.html(appsPage(userId, clients));
+  const session = c.get("session");
+  const ids = await listClientIds(c.env, session.userId);
+  const clients = (await Promise.all(ids.map((id) => c.env.OAUTH_PROVIDER.lookupClient(id)))).filter(
+    (client): client is ClientInfo => client != null,
+  );
+  return c.html(appsPage(userLabel(session), clients));
 });
 
-app.get("/apps/new", requireSession, (c) => c.html(newAppPage(c.get("userId"))));
+app.get("/apps/new", requireSession, (c) => c.html(newAppPage(userLabel(c.get("session")))));
 
 app.post("/apps", requireSession, async (c) => {
-  const userId = c.get("userId");
+  const session = c.get("session");
   const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
   const name = (form.name ?? "").trim();
   const redirectUris = normalizeUris(form.redirect_uris ?? "");
-  const confidential = form.type === "confidential";
   if (!name || !redirectUris) {
-    return c.html(newAppPage(userId, "名称不能为空，回调地址需为合法 URL(每行一个)。"), 400);
+    return c.html(newAppPage(userLabel(session), "名称不能为空，回调地址需为合法 URL（每行一个）。"), 400);
   }
-  const { clientId, clientSecret } = await createManagedClient(c.env, {
-    ownerId: userId,
-    name,
+  const client = await c.env.OAUTH_PROVIDER.createClient({
+    clientName: name,
     redirectUris,
-    confidential,
+    tokenEndpointAuthMethod: form.type === "confidential" ? "client_secret_basic" : "none",
   });
-  if (clientSecret) return c.html(secretRevealPage(userId, clientId, clientSecret, true));
-  return c.redirect(`/console/apps/${encodeURIComponent(clientId)}`);
+  await addOwnership(c.env, session.userId, client.clientId);
+  if (client.clientSecret) {
+    return c.html(secretRevealPage(userLabel(session), client.clientId, client.clientSecret, true));
+  }
+  return c.redirect(`/console/apps/${encodeURIComponent(client.clientId)}`);
 });
 
 app.get("/apps/:id", requireSession, async (c) => {
-  const userId = c.get("userId");
-  const client = await getOwnedClient(c.env, c.req.param("id") ?? "", userId);
+  const client = await getOwnedClient(c, c.req.param("id") ?? "");
   if (!client) return c.text("应用不存在或无权访问。", 404);
-  return c.html(editAppPage(userId, client));
+  return c.html(editAppPage(userLabel(c.get("session")), client));
 });
 
 app.post("/apps/:id", requireSession, async (c) => {
-  const userId = c.get("userId");
   const id = c.req.param("id") ?? "";
+  const client = await getOwnedClient(c, id);
+  if (!client) return c.text("应用不存在或无权访问。", 404);
   const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
   const name = (form.name ?? "").trim();
   const redirectUris = normalizeUris(form.redirect_uris ?? "");
   if (!name || !redirectUris) {
-    const client = await getOwnedClient(c.env, id, userId);
-    if (!client) return c.text("应用不存在或无权访问。", 404);
-    return c.html(editAppPage(userId, client, "名称不能为空，回调地址需为合法 URL(每行一个)。"), 400);
+    return c.html(
+      editAppPage(userLabel(c.get("session")), client, "名称不能为空，回调地址需为合法 URL（每行一个）。"),
+      400,
+    );
   }
-  const ok = await updateOwnedClient(c.env, id, userId, { name, redirectUris });
-  if (!ok) return c.text("应用不存在或无权访问。", 404);
+  await c.env.OAUTH_PROVIDER.updateClient(id, { clientName: name, redirectUris });
   return c.redirect(`/console/apps/${encodeURIComponent(id)}`);
 });
 
 app.post("/apps/:id/secret", requireSession, async (c) => {
-  const userId = c.get("userId");
   const id = c.req.param("id") ?? "";
-  const secret = await rotateClientSecret(c.env, id, userId);
-  if (!secret) return c.text("应用不存在、无权访问，或不是机密客户端。", 404);
-  return c.html(secretRevealPage(userId, id, secret, false));
+  const client = await getOwnedClient(c, id);
+  if (!client || client.tokenEndpointAuthMethod === "none") {
+    return c.text("应用不存在、无权访问，或不是机密客户端。", 404);
+  }
+  const secret = randomToken();
+  await c.env.OAUTH_PROVIDER.updateClient(id, { clientSecret: secret });
+  return c.html(secretRevealPage(userLabel(c.get("session")), id, secret, false));
 });
 
 app.post("/apps/:id/delete", requireSession, async (c) => {
-  const ok = await deleteOwnedClient(c.env, c.req.param("id") ?? "", c.get("userId"));
-  if (!ok) return c.text("应用不存在或无权访问。", 404);
+  const id = c.req.param("id") ?? "";
+  const session = c.get("session");
+  if ((await ownerOf(c.env, id)) !== session.userId) return c.text("应用不存在或无权访问。", 404);
+  await c.env.OAUTH_PROVIDER.deleteClient(id);
+  await removeOwnership(c.env, session.userId, id);
   return c.redirect("/console/apps");
 });
 

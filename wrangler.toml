@@ -5,8 +5,10 @@ compatibility_date = "2024-09-23"
 [vars]
 SEATABLE_SERVER_URL = "https://table.nju.edu.cn"
 
-[[d1_databases]]
-binding = "DB"
-database_name = "authserver-db"
-database_id = "c80c0aef-2ab2-4935-af3c-8fb7ecb259f6"
-migrations_dir = "migrations"
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "bf7cf2496d2248768aa0304110ef1fbd"
+
+[[kv_namespaces]]
+binding = "CONSOLE_KV"
+id = "e075db0d72b74501be9a87d11aa7dab4"

@@ -7,37 +7,26 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export interface AuthorizeParams {
-  client_id: string;
-  redirect_uri: string;
-  state: string;
-  scope: string;
-  code_challenge: string;
-  code_challenge_method: string;
+export interface LoginPageOptions {
+  action: string;
+  title: string;
+  subtitle: string;
+  hidden?: Record<string, string>;
+  error?: string;
 }
 
-export function loginPage(
-  params: AuthorizeParams,
-  clientName: string,
-  error?: string,
-): string {
-  const hidden = (Object.keys(params) as Array<keyof AuthorizeParams>)
-    .map(
-      (k) =>
-        `<input type="hidden" name="${k}" value="${escapeHtml(params[k] ?? "")}">`,
-    )
+export function loginPage(opts: LoginPageOptions): string {
+  const hidden = Object.entries(opts.hidden ?? {})
+    .map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`)
     .join("\n      ");
-
-  const errorBox = error
-    ? `<p class="error">${escapeHtml(error)}</p>`
-    : "";
+  const errorBox = opts.error ? `<p class="error">${escapeHtml(opts.error)}</p>` : "";
 
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>授权登录</title>
+  <title>${escapeHtml(opts.title)}</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #f5f5f7; margin: 0;
            display: flex; min-height: 100vh; align-items: center; justify-content: center; }
@@ -54,7 +43,6 @@ export function loginPage(
     button:hover { background: #1d4ed8; }
     .error { color: #b91c1c; background: #fee2e2; padding: .5rem .7rem;
              border-radius: 8px; font-size: .85rem; margin: 0 0 1rem; }
-    .app { font-weight: 600; }
     .hint { font-size: .85rem; color: #1e40af; margin: .75rem 0 0;
             background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
             padding: .65rem .75rem; }
@@ -63,9 +51,9 @@ export function loginPage(
   </style>
 </head>
 <body>
-  <form class="card" method="post" action="/authorize">
-    <h1>授权登录</h1>
-    <p class="sub"><span class="app">${escapeHtml(clientName)}</span> 请求访问你的账号，请粘贴您的 Token 以继续。</p>
+  <form class="card" method="post" action="${escapeHtml(opts.action)}">
+    <h1>${escapeHtml(opts.title)}</h1>
+    <p class="sub">${escapeHtml(opts.subtitle)}</p>
     ${errorBox}
     <label for="token">Token</label>
     <input id="token" name="token" type="password" autocomplete="off" autofocus required>

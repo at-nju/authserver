@@ -2,7 +2,13 @@ import type { Env } from "./env";
 
 const TABLE_NAME = "Table1";
 const ID_COL = "ID";
+const NAME_COL = "Name";
 const TOKEN_COL = "Token";
+
+export interface SeatableUser {
+  id: string;
+  name: string;
+}
 
 interface BaseToken {
   accessToken: string;
@@ -26,8 +32,7 @@ async function getBaseToken(env: Env): Promise<BaseToken> {
   return value;
 }
 
-// Verify a pasted Token against Table1; returns the matching ID, or null.
-export async function verifyToken(env: Env, token: string): Promise<string | null> {
+export async function verifyUser(env: Env, token: string): Promise<SeatableUser | null> {
   if (!token.trim()) return null;
 
   const base = await getBaseToken(env);
@@ -36,7 +41,7 @@ export async function verifyToken(env: Env, token: string): Promise<string | nul
     method: "POST",
     headers: { Authorization: `Bearer ${base.accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      sql: `SELECT \`${ID_COL}\` FROM \`${TABLE_NAME}\` WHERE \`${TOKEN_COL}\` = ? LIMIT 1`,
+      sql: `SELECT \`${ID_COL}\`, \`${NAME_COL}\` FROM \`${TABLE_NAME}\` WHERE \`${TOKEN_COL}\` = ? LIMIT 1`,
       parameters: [token],
       convert_keys: true,
     }),
@@ -44,7 +49,10 @@ export async function verifyToken(env: Env, token: string): Promise<string | nul
   if (!res.ok) throw new Error(`SeaTable SQL query failed: ${res.status}`);
 
   const data = (await res.json()) as { results?: Array<Record<string, unknown>> };
-  const id = data.results?.[0]?.[ID_COL];
-  const idStr = id == null ? "" : String(id).trim();
-  return idStr || null;
+  const row = data.results?.[0];
+  if (!row) return null;
+  const id = row[ID_COL] == null ? "" : String(row[ID_COL]).trim();
+  if (!id) return null;
+  const name = row[NAME_COL] == null ? "" : String(row[NAME_COL]).trim();
+  return { id, name };
 }
