@@ -10,7 +10,7 @@
 | GET  | `/authorize` | 登录页（解析授权请求、校验 client） |
 | POST | `/authorize` | 校验 Token → 由 provider 签发授权码 → 重定向回 client |
 | POST | `/token` | `authorization_code` / `refresh_token` 换 token（由 provider 实现） |
-| GET  | `/userinfo` | 携带 `Authorization: Bearer <access_token>`，返回 `{ sub, user_id, name }`，供资源服务器校验令牌 |
+| GET  | `/userinfo` | 携带 `Authorization: Bearer <access_token>`，返回 `{ sub, name }`，供资源服务器校验令牌 |
 | GET  | `/.well-known/oauth-authorization-server` | RFC 8414 元数据（由 provider 实现） |
 
 有效期：access token 1 小时，refresh token 30 天（均为 provider 默认，可在 `src/index.ts` 调整）。
@@ -18,7 +18,7 @@
 ## 资源服务器如何校验令牌
 
 资源服务器带 `Authorization: Bearer <access_token>` 请求 `/userinfo`：
-令牌有效则返回 `{ sub, user_id, name }`，无效则返回 401。
+令牌有效则返回 `{ sub, name }`，无效则返回 401。
 
 ## 管理后台
 

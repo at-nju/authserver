@@ -8,6 +8,6 @@ export interface UserProps {
 export const userInfoHandler = {
   async fetch(_request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
     const { userId, name } = (ctx as ExecutionContext & { props: UserProps }).props;
-    return Response.json({ sub: userId, user_id: userId, name });
+    return Response.json({ sub: userId, name });
   },
 };
