@@ -23,3 +23,4 @@ npx wrangler deploy
 - [部署](docs/deployment.md)
 - [本地联调](docs/development.md)
 - [接口与架构](docs/architecture.md)
+- [OAuth 接入说明（供 AI 阅读）](docs/integration.md)
