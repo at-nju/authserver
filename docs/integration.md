@@ -10,6 +10,8 @@ GET ISSUER/.well-known/openid-configuration
 
 Discovery 会给出 authorization、token、JWKS、UserInfo、introspection、revocation 与 end-session 端点。不要在新代码里写死旧路径。
 
+ID Token 使用 `RS256` 签名，JWKS 中对应密钥的 `kty` 为 `RSA`。
+
 ## 注册客户端
 
 1. 打开 `ISSUER/console`，用 SeaTable Token 登录。

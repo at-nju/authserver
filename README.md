@@ -6,6 +6,7 @@
 
 - OIDC Authorization Code Flow + PKCE（仅 `S256`）
 - `id_token`、JWKS、Discovery、UserInfo、Introspection、Revocation、RP-Initiated Logout
+- 使用 2048-bit RSA / RS256 签名 OIDC Token，兼容 Cloudflare Access
 - `openid profile email offline_access` scopes
 - SeaTable Token 登录，`ID` 作为稳定 `sub`，`Name` 作为展示名
 - `/console` 自助管理公开或机密客户端

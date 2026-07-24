@@ -9,6 +9,8 @@
 
 登录时，SeaTable `ID` 直接作为 Better Auth user id，因此也是稳定 OIDC `sub`。默认邮箱为 `<ID>@smail.nju.edu.cn`，当前不执行邮箱验证，因此 `email_verified` 为 `false`。
 
+OIDC ID Token 使用 2048-bit RSA 密钥和 `RS256` 签名。公钥通过 `/jwks` 发布；私钥由 Better Auth 加密后保存在 D1。
+
 ## 标准端点
 
 | 方法 | 路径 | 用途 |
@@ -53,7 +55,7 @@ SeaTable 暂时不可达时保持旧行为：刷新 fail-open，避免身份源�
 ## 安全边界
 
 - 授权码与令牌只以哈希形式持久化。
-- `id_token` 使用 D1 中的 Ed25519 JWKS 签名。
+- `id_token` 使用 D1 中的 2048-bit RSA JWKS，以 `RS256` 签名。
 - 控制台回跳只允许 `/console` 下的本地路径。
 - RFC 8707 `resource` 参数未启用，并在 Worker 入口直接返回 `invalid_request`。
 - access token 默认 1 小时，refresh token 默认 30 天，会话默认 7 天。

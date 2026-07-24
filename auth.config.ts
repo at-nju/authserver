@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins";
+import { JWT_KEY_PAIR_CONFIG } from "./src/jwt";
 
 export const auth = betterAuth({
   baseURL: "http://localhost",
@@ -19,7 +20,10 @@ export const auth = betterAuth({
     },
   },
   plugins: [
-    jwt(),
+    jwt({
+      disableSettingJwtHeader: true,
+      jwks: { keyPairConfig: JWT_KEY_PAIR_CONFIG },
+    }),
     oauthProvider({
       loginPage: "/login",
       consentPage: "/consent",

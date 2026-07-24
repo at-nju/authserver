@@ -11,6 +11,7 @@ import { jwt } from "better-auth/plugins";
 import { z } from "zod";
 import type { Env } from "./env";
 import { sha256Hex } from "./crypto";
+import { JWT_KEY_PAIR_CONFIG } from "./jwt";
 import { currentTokenHash, verifyUser } from "./seatable";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -175,7 +176,10 @@ export function createAuth(env: Env, origin: string) {
       },
     },
     plugins: [
-      jwt(),
+      jwt({
+        disableSettingJwtHeader: true,
+        jwks: { keyPairConfig: JWT_KEY_PAIR_CONFIG },
+      }),
       oauthProvider({
         loginPage: "/login",
         consentPage: "/consent",
