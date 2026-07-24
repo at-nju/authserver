@@ -1,90 +1,111 @@
-# OAuth 接入说明（供 AI 阅读）
+# OIDC 接入说明
 
-本服务是 OAuth 2.1 授权服务器（Authorization Code + PKCE）。本文档让 AI 助手据此为某个应用接入登录。
-把 `BASE` 替换为部署域名，即 `https://auth.nju.at`。
+把 `ISSUER` 替换为部署域名，例如 `https://auth.nju.at`。本服务是标准 OpenID Connect Provider；接入方应优先使用成熟 OIDC client library，并把 issuer 配置为 `ISSUER`。
 
-## 接入前提：需人工在网页注册客户端（AI 无法代办）
+## 自动发现
 
-`client_id` / `client_secret` 只能由人在网页后台创建。AI 应把下面这段操作步骤转告用户：
-
-1. 浏览器打开 `BASE/console`，用 SeaTable Token 登录。
-2. 点「新建应用」，填写：
-   - 应用名称：应用名（显示在用户授权页）。
-   - 客户端类型：**公开**（SPA/移动端/CLI，无密钥）或 **机密**（有后端、能保管密钥）。
-   - 回调地址 redirect_uri：每行一个，必须与代码里用的地址**完全一致**。
-3. 创建后把 `client_id`（机密客户端还有只显示一次的 `client_secret`）回填给 AI。
-
-最终登录的用户必须在 SeaTable `Table1` 里有记录（持有自己的 Token），否则无法登录。
-
-## 端点
-
-- 元数据（可选自动发现）：`GET BASE/.well-known/oauth-authorization-server`
-- 授权：`GET BASE/authorize`
-- 令牌：`POST BASE/token`（`application/x-www-form-urlencoded`）
-- 用户信息：`GET BASE/userinfo`
-
-## 流程
-
-### 1. 生成 PKCE（必须 S256）
-- `code_verifier`：43–128 字符随机串。
-- `code_challenge` = BASE64URL(SHA256(code_verifier))，无 padding。
-
-### 2. 重定向用户到授权页
+```text
+GET ISSUER/.well-known/openid-configuration
 ```
-GET BASE/authorize
+
+Discovery 会给出 authorization、token、JWKS、UserInfo、introspection、revocation 与 end-session 端点。不要在新代码里写死旧路径。
+
+## 注册客户端
+
+1. 打开 `ISSUER/console`，用 SeaTable Token 登录。
+2. 新建应用并填写精确的回调地址。
+3. SPA、移动端、CLI 选**公开客户端**；有可信后端并能保管 secret 时选**机密客户端**。
+4. 保存 `client_id`。机密客户端还需立即保存只展示一次的 `client_secret`。
+
+动态客户端注册关闭。每个用户只能管理自己创建的客户端。
+
+## 推荐参数
+
+- Flow：Authorization Code
+- PKCE：必须 `S256`
+- response type：`code`
+- scopes：`openid profile offline_access`
+- `state`：每次请求生成并严格校验
+- `nonce`：每次请求生成，并在验证 `id_token` 时校验
+- redirect URI：必须与注册值完全一致
+
+授权请求示例：
+
+```text
+GET ISSUER/oauth2/authorize
   ?response_type=code
   &client_id=<client_id>
-  &redirect_uri=<已注册的回调地址>
-  &code_challenge=<code_challenge>
+  &redirect_uri=<registered_redirect_uri>
+  &scope=openid%20profile%20offline_access
+  &state=<random>
+  &nonce=<random>
+  &code_challenge=<base64url_sha256_verifier>
   &code_challenge_method=S256
-  &state=<随机串>
-  &scope=openid
 ```
-用户登录授权后跳回 `redirect_uri?code=<code>&state=<state>`。必须校验返回的 `state` 与发出的一致。
 
-### 3. 用 code 换令牌
+用户完成 SeaTable 登录与 consent 后，会跳回：
+
+```text
+<registered_redirect_uri>?code=<authorization_code>&state=<state>
 ```
-POST BASE/token
+
+## 换取令牌
+
+```text
+POST ISSUER/oauth2/token
 Content-Type: application/x-www-form-urlencoded
 
 grant_type=authorization_code
 &client_id=<client_id>
-&code=<code>
-&redirect_uri=<同上，须一致>
-&code_verifier=<code_verifier>
-```
-机密客户端额外带 `client_secret`（表单字段，或用 HTTP Basic：`Authorization: Basic base64(client_id:client_secret)`）。
-
-响应：
-```json
-{
-  "access_token": "...",
-  "token_type": "Bearer",
-  "expires_in": 3600,
-  "refresh_token": "...",
-  "scope": "openid"
-}
+&code=<authorization_code>
+&redirect_uri=<registered_redirect_uri>
+&code_verifier=<verifier>
 ```
 
-### 4. 取用户身份
+机密客户端使用 HTTP Basic：
+
+```text
+Authorization: Basic base64(client_id:client_secret)
 ```
-GET BASE/userinfo
+
+成功响应包含：
+
+- `access_token`：默认 3600 秒
+- `id_token`：包含稳定 `sub`，使用 Discovery 的 `jwks_uri` 验签
+- `refresh_token`：请求 `offline_access` 时返回，默认 30 天
+- `token_type=Bearer`
+
+验证 `id_token` 时至少校验签名、`iss`、`aud`、`exp` 与 `nonce`。不要只 decode JWT。
+
+## 用户身份
+
+```text
+GET ISSUER/oauth2/userinfo
 Authorization: Bearer <access_token>
 ```
-响应：`{ "sub": "<用户唯一ID>", "name": "<用户名>" }`。用 `sub` 作为用户的稳定唯一标识。令牌无效返回 401。
 
-### 5. 刷新令牌（access_token 过期后）
-```
-POST BASE/token
+`sub` 是 SeaTable `ID`，稳定且唯一；`name` 来自 SeaTable `Name`。本服务不提供 `email` scope。
+
+## 刷新、撤销与退出
+
+刷新：
+
+```text
+POST ISSUER/oauth2/token
 grant_type=refresh_token
-&client_id=<client_id>
 &refresh_token=<refresh_token>
 ```
-机密客户端同样需带 `client_secret`。
 
-## 约束
+机密客户端仍需认证。refresh token 会轮换；客户端必须保存响应中的新 refresh token。SeaTable Token 已轮换或删除时，刷新返回 `invalid_grant`，需要重新登录。
 
-- `code_challenge_method` 必须为 `S256`，不接受 `plain`。
-- `redirect_uri` 在授权和换令牌两步必须完全一致，且与注册值精确匹配（无通配）。
-- 授权码一次性、短时有效。
-- 校验令牌只用 `GET BASE/userinfo`（Bearer），不提供 introspection 端点。
+撤销与退出地址从 Discovery 获取：
+
+- `/oauth2/revoke`
+- `/oauth2/end-session`
+
+## 兼容与限制
+
+- 旧 `/authorize`、`/token`、`/userinfo` 仍可用，但只用于已有集成迁移。
+- 不支持 implicit flow、password grant、plain PKCE、通配 redirect URI。
+- 不支持 RFC 8707 `resource` 参数；携带时返回 `invalid_request`。
+- 资源服务器可调用 UserInfo 或 introspection；验证 `id_token` 应使用 JWKS 本地验签。

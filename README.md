@@ -1,26 +1,43 @@
-# SeaTable Authserver
+# SeaTable OIDC Authserver
 
-跑在 **Cloudflare Workers + KV** 上的 OAuth 2.1 授权服务器（**Authorization Code + PKCE**），底层由官方
-[`@cloudflare/workers-oauth-provider`](https://github.com/cloudflare/workers-oauth-provider) 实现。
+运行在 **Cloudflare Workers + D1** 上的 OpenID Connect Provider。协议实现采用
+[`better-auth`](https://github.com/better-auth/better-auth) 与
+[`@better-auth/oauth-provider`](https://www.npmjs.com/package/@better-auth/oauth-provider)，身份来自 SeaTable `Table1`。
 
-- OAuth 状态全部存在 **KV**（`OAUTH_KV`），密钥仅存哈希，`props` 经令牌加密。
-- **SeaTable `Table1` 作为身份源**：用户粘贴自己的 **Token**，命中则取该行的 **`ID`** / **`Name`** 作为身份。
-- 自带管理后台 `/console`，用 SeaTable Token 登录即可自助注册客户端。
+- OIDC Authorization Code Flow + PKCE（仅 `S256`）
+- `id_token`、JWKS、Discovery、UserInfo、Introspection、Revocation、RP-Initiated Logout
+- `openid profile offline_access` scopes
+- SeaTable Token 登录，`ID` 作为稳定 `sub`，`Name` 作为展示名
+- `/console` 自助管理公开或机密客户端
+- access token 1 小时，refresh token 30 天；SeaTable Token 轮换后拒绝继续刷新
+- 旧 `/authorize`、`/token`、`/userinfo` 路径保留兼容
 
-## 快速开始
+## 本地运行
 
 ```bash
 npm install
-npx wrangler kv namespace create OAUTH_KV       # 把 id 填进 wrangler.toml
-npx wrangler kv namespace create CONSOLE_KV
-npx wrangler secret put SEATABLE_API_TOKEN
-npx wrangler secret put CONSOLE_SESSION_SECRET
-npx wrangler deploy
+npm run db:migrate:local
+npm run dev
+```
+
+本地密钥放在已忽略的 `.dev.vars`：
+
+```dotenv
+SEATABLE_API_TOKEN=...
+CONSOLE_SESSION_SECRET=至少 32 字节的随机值
+```
+
+## 验证
+
+```bash
+npm test
+npm run typecheck
+npm run schema:generate
 ```
 
 ## 文档
 
+- [架构与端点](docs/architecture.md)
 - [部署](docs/deployment.md)
 - [本地联调](docs/development.md)
-- [接口与架构](docs/architecture.md)
-- [OAuth 接入说明（供 AI 阅读）](docs/integration.md)
+- [OIDC 接入说明](docs/integration.md)
