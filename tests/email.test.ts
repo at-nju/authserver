@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultUserEmail } from "../src/auth";
+import { defaultUserEmail } from "../src/email_policy";
 import { appsPage } from "../src/console_views";
 
 describe("email support", () => {

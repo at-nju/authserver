@@ -11,6 +11,7 @@ import { jwt } from "better-auth/plugins";
 import { z } from "zod";
 import type { Env } from "./env";
 import { sha256Hex } from "./crypto";
+import { defaultUserEmail } from "./email_policy";
 import { JWT_KEY_PAIR_CONFIG } from "./jwt";
 import { currentTokenHash, verifyUser } from "./seatable";
 
@@ -23,10 +24,6 @@ function invalidGrant(description: string): APIError {
     error: "invalid_grant",
     error_description: description,
   });
-}
-
-export function defaultUserEmail(userId: string): string {
-  return `${userId}@smail.nju.edu.cn`;
 }
 
 function seatableAuth(env: Env) {
@@ -67,13 +64,12 @@ function seatableAuth(env: Env) {
               id: identity.id,
               name,
               email,
-              emailVerified: false,
+              emailVerified: true,
             });
-          } else if (user.name !== name || user.email !== email || user.emailVerified) {
+          } else if (user.name !== name || !user.emailVerified) {
             user = await ctx.context.internalAdapter.updateUser(identity.id, {
               name,
-              email,
-              emailVerified: false,
+              emailVerified: true,
             });
           }
           if (!user) {
