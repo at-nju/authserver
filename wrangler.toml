@@ -1,14 +1,13 @@
 name = "authserver"
 main = "src/index.ts"
-compatibility_date = "2024-09-23"
+compatibility_date = "2026-07-23"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 SEATABLE_SERVER_URL = "https://table.nju.edu.cn"
 
-[[kv_namespaces]]
-binding = "OAUTH_KV"
-id = "bf7cf2496d2248768aa0304110ef1fbd"
-
-[[kv_namespaces]]
-binding = "CONSOLE_KV"
-id = "e075db0d72b74501be9a87d11aa7dab4"
+[[d1_databases]]
+binding = "AUTH_DB"
+database_name = "authserver"
+database_id = "9ffad5cf-c66b-43b1-8641-edfa3d8f57d0"
+migrations_dir = "migrations"

@@ -1,119 +1,267 @@
 import { Hono } from "hono";
-import { OAuthProvider, OAuthError, GrantType, type AuthRequest } from "@cloudflare/workers-oauth-provider";
+import { createAuth } from "./auth";
+import consoleApp, { type AppVariables } from "./console";
+import type { OAuthClientView } from "./console_views";
 import type { Env } from "./env";
-import { verifyUser, currentTokenHash } from "./seatable";
-import { signBlob, verifyBlob, sha256Hex } from "./crypto";
-import { loginPage } from "./views";
-import { userInfoHandler } from "./userinfo";
-import consoleApp from "./console";
+import {
+  hasUnsupportedResourceIndicator,
+  unsupportedResourceResponse,
+} from "./security";
+import { consentPage, loginPage } from "./views";
 
-const AUTHORIZE_TITLE = "授权登录";
-const AUTH_REQ_FIELD = "auth_req";
+const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
-const app = new Hono<{ Bindings: Env }>();
+app.use("*", async (c, next) => {
+  if (await hasUnsupportedResourceIndicator(c.req.raw)) {
+    return unsupportedResourceResponse();
+  }
+  c.set("auth", createAuth(c.env, new URL(c.req.url).origin));
+  await next();
+});
 
 app.route("/console", consoleApp);
 app.get("/", (c) => c.redirect("/console"));
 
-function authorizeSubtitle(appName: string): string {
-  return `${appName} 请求访问你的账号，请粘贴你的 Token 以继续。`;
+function signedQuery(requestUrl: string): string {
+  return new URL(requestUrl).searchParams.toString();
 }
 
-function authorizePage(action: string, appName: string, authReqBlob: string, error?: string): string {
-  return loginPage({
-    action,
-    title: AUTHORIZE_TITLE,
-    subtitle: authorizeSubtitle(appName),
-    hidden: { [AUTH_REQ_FIELD]: authReqBlob },
-    error,
-  });
+export function safeReturnTo(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value, "https://local.invalid");
+    const isConsolePath = url.pathname === "/console" || url.pathname.startsWith("/console/");
+    if (url.origin !== "https://local.invalid" || !isConsolePath) {
+      return undefined;
+    }
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return undefined;
+  }
 }
 
-// parseAuthRequest validates client_id, redirect_uri and PKCE, throwing on
-// failure. Per RFC 6749 §4.1.2.1 these errors must not redirect back.
-app.get("/authorize", async (c) => {
-  let authReq: AuthRequest;
+async function clientForSignedQuery(
+  auth: ReturnType<typeof createAuth>,
+  headers: Headers,
+  oauthQuery: string,
+): Promise<OAuthClientView | null> {
+  const clientId = new URLSearchParams(oauthQuery).get("client_id");
+  if (!clientId) return null;
   try {
-    authReq = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
+    return (await auth.api.getOAuthClientPublicPrelogin({
+      headers,
+      body: { client_id: clientId, oauth_query: oauthQuery },
+    })) as OAuthClientView;
   } catch {
-    return c.html("<h1>无效的授权请求</h1><p>client_id、redirect_uri 或 PKCE 参数不正确。</p>", 400);
+    return null;
   }
-  const client = await c.env.OAUTH_PROVIDER.lookupClient(authReq.clientId);
-  if (!client) return c.html("<h1>无效的 client_id</h1>", 400);
+}
 
-  const blob = await signBlob(c.env.CONSOLE_SESSION_SECRET, authReq);
-  return c.html(authorizePage("/authorize", client.clientName ?? client.clientId, blob));
-});
-
-app.post("/authorize", async (c) => {
-  const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
-  const blob = form[AUTH_REQ_FIELD] ?? "";
-  const authReq = await verifyBlob<AuthRequest>(c.env.CONSOLE_SESSION_SECRET, blob);
-  if (!authReq) return c.html("<h1>授权请求已失效，请重新发起。</h1>", 400);
-
-  const client = await c.env.OAUTH_PROVIDER.lookupClient(authReq.clientId);
-  const appName = client?.clientName ?? authReq.clientId;
-
-  let user;
-  try {
-    user = await verifyUser(c.env, form.token ?? "");
-  } catch {
-    return c.html(authorizePage("/authorize", appName, blob, "授权服务暂时不可用，请稍后重试。"), 502);
-  }
-  if (!user) {
-    return c.html(authorizePage("/authorize", appName, blob, "Token 无效，请检查后重试。"), 401);
-  }
-
-  const tokenHash = await sha256Hex(form.token ?? "");
-  const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
-    request: authReq,
-    userId: user.id,
-    metadata: {},
-    scope: authReq.scope,
-    props: { userId: user.id, name: user.name, tokenHash },
-  });
-  return c.redirect(redirectTo);
-});
-
-// tokenExchangeCallback gets no env, so capture it here. env is stable across
-// requests, making this module-level reference safe.
-let envRef: Env | undefined;
-
-// On refresh, reject if the user's SeaTable token no longer matches the one
-// present at login — i.e. it was rotated. Fail open if SeaTable is unreachable.
-async function rejectIfTokenRotated(options: {
-  grantType: GrantType;
-  userId: string;
-  props: { tokenHash?: string };
+function loginHtml(options: {
+  oauthQuery?: string;
+  returnTo?: string;
+  appName?: string;
+  error?: string;
 }) {
-  if (options.grantType !== GrantType.REFRESH_TOKEN || !envRef) return;
-  let current: string | null;
-  try {
-    current = await currentTokenHash(envRef, options.userId);
-  } catch {
-    return;
-  }
-  if (current !== options.props?.tokenHash) {
-    throw new OAuthError("invalid_grant", { description: "SeaTable token 已轮换，请重新登录。" });
-  }
+  const isAuthorization = Boolean(options.oauthQuery);
+  return loginPage({
+    action: "/login",
+    title: isAuthorization ? "授权登录" : "管理后台登录",
+    subtitle: isAuthorization
+      ? `${options.appName ?? "应用"} 请求访问你的账号，请粘贴你的 Token 以继续。`
+      : "登录以管理你的 OIDC 应用，请粘贴你的 Token 以继续。",
+    hidden: {
+      ...(options.oauthQuery ? { oauth_query: options.oauthQuery } : {}),
+      ...(options.returnTo ? { return_to: options.returnTo } : {}),
+    },
+    error: options.error,
+  });
 }
 
-const provider = new OAuthProvider({
-  apiRoute: "/userinfo",
-  apiHandler: userInfoHandler,
-  defaultHandler: app,
-  authorizeEndpoint: "/authorize",
-  tokenEndpoint: "/token",
-  scopesSupported: ["openid", "profile"],
-  clientRegistrationTTL: undefined,
-  allowImplicitFlow: false,
-  allowPlainPKCE: false,
-  tokenExchangeCallback: rejectIfTokenRotated,
+app.get("/login", async (c) => {
+  const oauthQuery = signedQuery(c.req.url);
+  if (!oauthQuery) return c.html(loginHtml({ returnTo: "/console/apps" }));
+  const client = await clientForSignedQuery(c.get("auth"), c.req.raw.headers, oauthQuery);
+  if (!client) return c.html("<h1>无效或已过期的授权请求</h1>", 400);
+  return c.html(
+    loginHtml({
+      oauthQuery,
+      appName: client.client_name ?? client.client_id,
+    }),
+  );
 });
 
-export default {
-  fetch(request: Request, env: Env, ctx: ExecutionContext): Response | Promise<Response> {
-    envRef = env;
-    return provider.fetch(request, env, ctx);
-  },
-};
+app.post("/login", async (c) => {
+  const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
+  const oauthQuery = form.oauth_query?.trim() || undefined;
+  const returnTo = safeReturnTo(form.return_to) ?? (oauthQuery ? undefined : "/console/apps");
+  const auth = c.get("auth");
+  const client = oauthQuery
+    ? await clientForSignedQuery(auth, c.req.raw.headers, oauthQuery)
+    : null;
+  if (oauthQuery && !client) return c.html("<h1>无效或已过期的授权请求</h1>", 400);
+
+  const response = await handleAuthResponse(
+    auth,
+    jsonAuthRequest(c.req.raw, "/sign-in/seatable", {
+      token: form.token ?? "",
+      callbackURL: returnTo,
+      oauth_query: oauthQuery,
+    }),
+  );
+
+  if (response.status >= 300 && response.status < 400) return response;
+  if (!response.ok) {
+    let message = "登录失败，请重试。";
+    try {
+      const body = (await response.clone().json()) as { message?: string };
+      if (body.message?.includes("Invalid SeaTable")) message = "Token 无效，请检查后重试。";
+      if (body.message?.includes("temporarily unavailable")) {
+        message = "授权服务暂时不可用，请稍后重试。";
+      }
+    } catch {
+      // Keep the generic error message.
+    }
+    return c.html(
+      loginHtml({
+        oauthQuery,
+        returnTo,
+        appName: client?.client_name ?? client?.client_id,
+        error: message,
+      }),
+      response.status === 401 ? 401 : 502,
+    );
+  }
+
+  const headers = new Headers(response.headers);
+  if (returnTo) {
+    headers.set("Location", returnTo);
+    return new Response(null, { status: 302, headers });
+  }
+
+  try {
+    const body = (await response.clone().json()) as { url?: string };
+    if (body.url) {
+      headers.set("Location", body.url);
+      return new Response(null, { status: 302, headers });
+    }
+  } catch {
+    // The provider normally returns a redirect for browser authorization flows.
+  }
+  return response;
+});
+
+app.get("/consent", async (c) => {
+  const oauthQuery = signedQuery(c.req.url);
+  const client = await clientForSignedQuery(c.get("auth"), c.req.raw.headers, oauthQuery);
+  if (!client) return c.html("<h1>无效或已过期的授权请求</h1>", 400);
+  const scopes = new URLSearchParams(oauthQuery).get("scope")?.split(" ").filter(Boolean) ?? [];
+  return c.html(
+    consentPage({
+      appName: client.client_name ?? client.client_id,
+      scopes,
+      oauthQuery,
+    }),
+  );
+});
+
+app.post("/consent", async (c) => {
+  const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
+  const response = await handleAuthResponse(
+    c.get("auth"),
+    jsonAuthRequest(c.req.raw, "/oauth2/consent", {
+      accept: form.accept === "true",
+      oauth_query: form.oauth_query,
+    }),
+  );
+  if (response.status >= 300 && response.status < 400) return response;
+  try {
+    const body = (await response.clone().json()) as { url?: string; redirect?: boolean };
+    if (body.redirect && body.url) {
+      const headers = new Headers(response.headers);
+      headers.set("Location", body.url);
+      return new Response(null, { status: 302, headers });
+    }
+  } catch {
+    // Return the provider response unchanged when it is not JSON.
+  }
+  return response;
+});
+
+function rewriteRequest(request: Request, pathname: string): Request {
+  const url = new URL(request.url);
+  url.pathname = pathname;
+  return new Request(url, request);
+}
+
+function jsonAuthRequest(request: Request, pathname: string, body: unknown): Request {
+  const url = new URL(request.url);
+  url.pathname = pathname;
+  const headers = new Headers(request.headers);
+  headers.set("Content-Type", "application/json");
+  headers.delete("Content-Length");
+  return new Request(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
+async function handleAuthResponse(
+  auth: ReturnType<typeof createAuth>,
+  request: Request,
+): Promise<Response> {
+  const response = await auth.handler(request);
+  if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) {
+    return response;
+  }
+  try {
+    const body = (await response.clone().json()) as {
+      redirect?: boolean;
+      url?: string;
+      token_endpoint_auth_methods_supported?: string[];
+    };
+    const pathname = new URL(request.url).pathname;
+    if (
+      (pathname === "/.well-known/openid-configuration" ||
+        pathname === "/.well-known/oauth-authorization-server") &&
+      body.token_endpoint_auth_methods_supported &&
+      !body.token_endpoint_auth_methods_supported.includes("none")
+    ) {
+      body.token_endpoint_auth_methods_supported.unshift("none");
+      const headers = new Headers(response.headers);
+      headers.delete("Content-Length");
+      return new Response(JSON.stringify(body), {
+        status: response.status,
+        headers,
+      });
+    }
+    if (body.redirect && body.url) {
+      const headers = new Headers(response.headers);
+      headers.delete("Content-Length");
+      headers.delete("Content-Type");
+      headers.set("Location", body.url);
+      return new Response(null, { status: 302, headers });
+    }
+  } catch {
+    // Leave ordinary JSON API responses untouched.
+  }
+  return response;
+}
+
+// Compatibility aliases for clients configured against the previous service.
+app.get("/authorize", (c) => {
+  const url = new URL(c.req.url);
+  url.pathname = "/oauth2/authorize";
+  return c.redirect(`${url.pathname}${url.search}`);
+});
+app.post("/token", (c) =>
+  handleAuthResponse(c.get("auth"), rewriteRequest(c.req.raw, "/oauth2/token")),
+);
+app.on(["GET", "POST"], "/userinfo", (c) =>
+  handleAuthResponse(c.get("auth"), rewriteRequest(c.req.raw, "/oauth2/userinfo")),
+);
+
+app.all("*", (c) => handleAuthResponse(c.get("auth"), c.req.raw));
+
+export default app;

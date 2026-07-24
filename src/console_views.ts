@@ -1,5 +1,11 @@
-import type { ClientInfo } from "@cloudflare/workers-oauth-provider";
 import { escapeHtml } from "./views";
+
+export interface OAuthClientView {
+  client_id: string;
+  client_name?: string;
+  redirect_uris: string[];
+  token_endpoint_auth_method?: "none" | "client_secret_basic" | "client_secret_post";
+}
 
 const STYLE = `
   body { font-family: system-ui, sans-serif; background: #f5f5f7; margin: 0; color: #1f2937; }
@@ -50,7 +56,7 @@ function shell(title: string, userLabel: string, body: string): string {
 </head>
 <body>
   <header>
-    <span class="brand">OAuth 管理后台</span>
+    <span class="brand">OIDC 管理后台</span>
     <span>
       <span class="user">${escapeHtml(userLabel)}</span>
       <form method="post" action="/console/logout" style="display:inline">
@@ -63,47 +69,51 @@ function shell(title: string, userLabel: string, body: string): string {
 </html>`;
 }
 
-function isConfidential(c: ClientInfo): boolean {
-  return c.tokenEndpointAuthMethod !== "none";
+function isConfidential(client: OAuthClientView): boolean {
+  return client.token_endpoint_auth_method !== "none";
 }
 
-function badgeHtml(c: ClientInfo): string {
-  return isConfidential(c)
+function badgeHtml(client: OAuthClientView): string {
+  return isConfidential(client)
     ? `<span class="badge conf">机密</span>`
     : `<span class="badge pub">公开</span>`;
 }
 
-export function appsPage(userLabel: string, clients: ClientInfo[]): string {
+export function appsPage(userLabel: string, clients: OAuthClientView[]): string {
   const list = clients.length
     ? clients
-        .map((c) => {
-          const name = c.clientName ?? c.clientId;
+        .map((client) => {
+          const name = client.client_name ?? client.client_id;
           return `<div class="card">
       <div class="row" style="margin:0">
         <div>
-          <strong>${escapeHtml(name)}</strong>${badgeHtml(c)}
-          <div class="cid">${escapeHtml(c.clientId)} · ${c.redirectUris.length} 个回调地址</div>
+          <strong>${escapeHtml(name)}</strong>${badgeHtml(client)}
+          <div class="cid">${escapeHtml(client.client_id)} · ${client.redirect_uris.length} 个回调地址</div>
         </div>
-        <a class="btn ghost" href="/console/apps/${encodeURIComponent(c.clientId)}">管理</a>
+        <a class="btn ghost" href="/console/apps/${encodeURIComponent(client.client_id)}">管理</a>
       </div>
     </div>`;
         })
         .join("\n")
     : `<div class="card empty">还没有应用，点右上角「新建应用」开始接入。</div>`;
 
-  const body = `
-    <div class="row">
+  return shell(
+    "我的应用",
+    userLabel,
+    `<div class="row">
       <h1>我的应用</h1>
       <a class="btn primary" href="/console/apps/new">新建应用</a>
     </div>
-    ${list}`;
-  return shell("我的应用", userLabel, body);
+    ${list}`,
+  );
 }
 
 export function newAppPage(userLabel: string, error?: string): string {
   const err = error ? `<div class="warn">${escapeHtml(error)}</div>` : "";
-  const body = `
-    <div class="row"><h1>新建应用</h1><a class="btn ghost" href="/console/apps">返回</a></div>
+  return shell(
+    "新建应用",
+    userLabel,
+    `<div class="row"><h1>新建应用</h1><a class="btn ghost" href="/console/apps">返回</a></div>
     ${err}
     <div class="card">
       <form method="post" action="/console/apps">
@@ -111,7 +121,7 @@ export function newAppPage(userLabel: string, error?: string): string {
         <input type="text" name="name" required autofocus>
         <label>客户端类型</label>
         <div class="radio">
-          <label><input type="radio" name="type" value="public" checked> 公开（仅 PKCE，无密钥）</label>
+          <label><input type="radio" name="type" value="public" checked> 公开（强制 PKCE，无密钥）</label>
           <label><input type="radio" name="type" value="confidential"> 机密（带密钥）</label>
         </div>
         <p class="hint">SPA / 移动端 / CLI 选公开；有后端、能保密的服务选机密。</p>
@@ -120,37 +130,44 @@ export function newAppPage(userLabel: string, error?: string): string {
         <p class="hint">授权后只会跳转到这里列出的地址，需完全一致。</p>
         <div class="actions"><button class="btn primary" type="submit">创建</button></div>
       </form>
-    </div>`;
-  return shell("新建应用", userLabel, body);
+    </div>`,
+  );
 }
 
-export function editAppPage(userLabel: string, client: ClientInfo, error?: string): string {
-  const conf = isConfidential(client);
+export function editAppPage(
+  userLabel: string,
+  client: OAuthClientView,
+  error?: string,
+): string {
+  const confidential = isConfidential(client);
   const err = error ? `<div class="warn">${escapeHtml(error)}</div>` : "";
-  const name = client.clientName ?? client.clientId;
-  const secretBlock = conf
+  const name = client.client_name ?? client.client_id;
+  const secretBlock = confidential
     ? `<div class="card">
         <h2>客户端密钥</h2>
         <p class="hint">密钥只在创建/轮换时展示一次。忘记了就轮换一个新的（旧的立即失效）。</p>
-        <form method="post" action="/console/apps/${encodeURIComponent(client.clientId)}/secret">
+        <form method="post" action="/console/apps/${encodeURIComponent(client.client_id)}/secret">
           <button class="btn ghost" type="submit">轮换密钥</button>
         </form>
       </div>`
     : "";
-  const body = `
-    <div class="row">
+
+  return shell(
+    "管理应用",
+    userLabel,
+    `<div class="row">
       <h1>${escapeHtml(name)} ${badgeHtml(client)}</h1>
       <a class="btn ghost" href="/console/apps">返回</a>
     </div>
     ${err}
     <div class="card">
       <label>Client ID</label>
-      <div class="secret">${escapeHtml(client.clientId)}</div>
-      <form method="post" action="/console/apps/${encodeURIComponent(client.clientId)}">
+      <div class="secret">${escapeHtml(client.client_id)}</div>
+      <form method="post" action="/console/apps/${encodeURIComponent(client.client_id)}">
         <label>应用名称</label>
         <input type="text" name="name" value="${escapeHtml(name)}" required>
         <label>回调地址（每行一个）</label>
-        <textarea name="redirect_uris" required>${escapeHtml(client.redirectUris.join("\n"))}</textarea>
+        <textarea name="redirect_uris" required>${escapeHtml(client.redirect_uris.join("\n"))}</textarea>
         <div class="actions"><button class="btn primary" type="submit">保存</button></div>
       </form>
     </div>
@@ -158,12 +175,12 @@ export function editAppPage(userLabel: string, client: ClientInfo, error?: strin
     <div class="card">
       <h2>删除应用</h2>
       <p class="hint">删除后该 client_id 立即失效，无法恢复。</p>
-      <form method="post" action="/console/apps/${encodeURIComponent(client.clientId)}/delete"
+      <form method="post" action="/console/apps/${encodeURIComponent(client.client_id)}/delete"
             onsubmit="return confirm('确定删除该应用？此操作不可恢复。')">
         <button class="btn danger" type="submit">删除应用</button>
       </form>
-    </div>`;
-  return shell("管理应用", userLabel, body);
+    </div>`,
+  );
 }
 
 export function secretRevealPage(
@@ -172,8 +189,10 @@ export function secretRevealPage(
   secret: string,
   isNew: boolean,
 ): string {
-  const body = `
-    <div class="row"><h1>${isNew ? "应用已创建" : "密钥已轮换"}</h1></div>
+  return shell(
+    "客户端密钥",
+    userLabel,
+    `<div class="row"><h1>${isNew ? "应用已创建" : "密钥已轮换"}</h1></div>
     <div class="card">
       <div class="warn">请立即复制并妥善保存密钥，它只展示这一次，关闭后无法再查看。</div>
       <label>Client ID</label>
@@ -183,6 +202,6 @@ export function secretRevealPage(
       <div class="actions">
         <a class="btn primary" href="/console/apps/${encodeURIComponent(clientId)}">我已保存，继续</a>
       </div>
-    </div>`;
-  return shell("客户端密钥", userLabel, body);
+    </div>`,
+  );
 }
