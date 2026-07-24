@@ -9,7 +9,7 @@ import {
 
 describe("SMTP protocol helpers", () => {
   it("parses single-line and continued replies", () => {
-    expect(parseSmtpReplyStart("220 smtp.feishu.cn ready")).toEqual({
+    expect(parseSmtpReplyStart("220 smtp ready")).toEqual({
       code: 220,
       continued: false,
     });

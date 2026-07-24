@@ -27,7 +27,7 @@ npm run dev
 ```dotenv
 SEATABLE_API_TOKEN=...
 CONSOLE_SESSION_SECRET=至少 32 字节的随机值
-FEISHU_SMTP_PASSWORD=noreply@nju.at 的飞书邮箱专用密码
+SMTP_PASSWORD=noreply@nju.at 的飞书邮箱专用密码
 ```
 
 ## 验证

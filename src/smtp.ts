@@ -118,7 +118,7 @@ async function authenticate(
 }
 
 export function isEmailDeliveryConfigured(env: Env): boolean {
-  return Boolean(env.FEISHU_SMTP_PASSWORD?.trim());
+  return Boolean(env.SMTP_PASSWORD?.trim());
 }
 
 export async function sendVerificationEmail(
@@ -126,8 +126,8 @@ export async function sendVerificationEmail(
   email: string,
   otp: string,
 ): Promise<void> {
-  const password = env.FEISHU_SMTP_PASSWORD?.trim();
-  if (!password) throw new Error("Feishu SMTP is not configured");
+  const password = env.SMTP_PASSWORD?.trim();
+  if (!password) throw new Error("SMTP is not configured");
 
   const socket = connect(
     { hostname: SMTP_HOST, port: SMTP_PORT },
