@@ -9,9 +9,6 @@ preview_urls = false
 pattern = "auth.nju.at/*"
 zone_name = "210023.xyz"
 
-[vars]
-SEATABLE_SERVER_URL = "https://table.nju.edu.cn"
-
 [[d1_databases]]
 binding = "AUTH_DB"
 database_name = "authserver"

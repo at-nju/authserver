@@ -1,6 +1,7 @@
 import type { Env } from "./env";
 import { sha256Hex } from "./crypto";
 
+const SEATABLE_SERVER_URL = "https://table.nju.edu.cn";
 const TABLE_NAME = "Table1";
 const ID_COL = "ID";
 const NAME_COL = "Name";
@@ -23,7 +24,7 @@ async function getBaseToken(env: Env): Promise<BaseToken> {
   const nowSec = Math.floor(Date.now() / 1000);
   if (cachedBaseToken && cachedBaseToken.expiresAt > nowSec + 60) return cachedBaseToken.value;
 
-  const url = `${env.SEATABLE_SERVER_URL.replace(/\/$/, "")}/api/v2.1/dtable/app-access-token/`;
+  const url = `${SEATABLE_SERVER_URL.replace(/\/$/, "")}/api/v2.1/dtable/app-access-token/`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${env.SEATABLE_API_TOKEN}` } });
   if (!res.ok) throw new Error(`SeaTable app-access-token failed: ${res.status}`);
 
@@ -39,7 +40,7 @@ async function queryRow(
   parameters: unknown[],
 ): Promise<Record<string, unknown> | null> {
   const base = await getBaseToken(env);
-  const url = `${env.SEATABLE_SERVER_URL.replace(/\/$/, "")}/api-gateway/api/v2/dtables/${base.dtableUuid}/sql/`;
+  const url = `${SEATABLE_SERVER_URL.replace(/\/$/, "")}/api-gateway/api/v2/dtables/${base.dtableUuid}/sql/`;
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${base.accessToken}`, "Content-Type": "application/json" },

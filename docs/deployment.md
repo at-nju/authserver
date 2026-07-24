@@ -20,7 +20,7 @@ npx wrangler secret put CONSOLE_SESSION_SECRET
 npx wrangler secret put SMTP_PASSWORD
 ```
 
-`CONSOLE_SESSION_SECRET` 是沿用旧名称的 Better Auth 主密钥，至少使用 32 字节随机值；不要写进仓库。`SMTP_PASSWORD` 是飞书为 `noreply@nju.at` 生成的第三方客户端专用密码。SMTP 固定连接 `smtp.feishu.cn:465` 并使用 implicit TLS。`SEATABLE_SERVER_URL` 在 `wrangler.toml` 中配置。
+`CONSOLE_SESSION_SECRET` 是沿用旧名称的 Better Auth 主密钥，至少使用 32 字节随机值；不要写进仓库。`SMTP_PASSWORD` 是飞书为 `noreply@nju.at` 生成的第三方客户端专用密码。SMTP 固定连接 `smtp.feishu.cn:465` 并使用 implicit TLS。
 
 完成验证后部署：
 
