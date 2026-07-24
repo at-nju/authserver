@@ -24,7 +24,7 @@ Discovery 会给出 authorization、token、JWKS、UserInfo、introspection、re
 - Flow：Authorization Code
 - PKCE：必须 `S256`
 - response type：`code`
-- scopes：`openid profile offline_access`
+- scopes：`openid profile email offline_access`
 - `state`：每次请求生成并严格校验
 - `nonce`：每次请求生成，并在验证 `id_token` 时校验
 - redirect URI：必须与注册值完全一致
@@ -36,7 +36,7 @@ GET ISSUER/oauth2/authorize
   ?response_type=code
   &client_id=<client_id>
   &redirect_uri=<registered_redirect_uri>
-  &scope=openid%20profile%20offline_access
+  &scope=openid%20profile%20email%20offline_access
   &state=<random>
   &nonce=<random>
   &code_challenge=<base64url_sha256_verifier>
@@ -84,7 +84,10 @@ GET ISSUER/oauth2/userinfo
 Authorization: Bearer <access_token>
 ```
 
-`sub` 是 SeaTable `ID`，稳定且唯一；`name` 来自 SeaTable `Name`。本服务不提供 `email` scope。
+`sub` 是 SeaTable `ID`，稳定且唯一；`name` 来自 SeaTable `Name`。请求 `email` scope 后，ID Token 与 UserInfo 会包含：
+
+- `email`：默认值为 `<sub>@smail.nju.edu.cn`
+- `email_verified`：当前固定为 `false`，尚未接入邮箱验证
 
 ## 刷新、撤销与退出
 

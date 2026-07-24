@@ -23,7 +23,7 @@ export const auth = betterAuth({
     oauthProvider({
       loginPage: "/login",
       consentPage: "/consent",
-      scopes: ["openid", "profile", "offline_access"],
+      scopes: ["openid", "profile", "email", "offline_access"],
       grantTypes: ["authorization_code", "refresh_token"],
       allowDynamicClientRegistration: false,
       allowUnauthenticatedClientRegistration: false,

@@ -42,6 +42,9 @@ const STYLE = `
   .warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: .7rem .85rem;
           border-radius: 8px; font-size: .85rem; }
   .empty { color: #6b7280; text-align: center; padding: 2rem; }
+  .account { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  .account .label { color: #6b7280; font-size: .8rem; margin-bottom: .2rem; }
+  .account .email { font-family: ui-monospace, monospace; word-break: break-all; }
   .actions { margin-top: 1.25rem; display: flex; gap: .6rem; align-items: center; }
 `;
 
@@ -79,7 +82,11 @@ function badgeHtml(client: OAuthClientView): string {
     : `<span class="badge pub">公开</span>`;
 }
 
-export function appsPage(userLabel: string, clients: OAuthClientView[]): string {
+export function appsPage(
+  userLabel: string,
+  email: string,
+  clients: OAuthClientView[],
+): string {
   const list = clients.length
     ? clients
         .map((client) => {
@@ -103,6 +110,13 @@ export function appsPage(userLabel: string, clients: OAuthClientView[]): string 
     `<div class="row">
       <h1>我的应用</h1>
       <a class="btn primary" href="/console/apps/new">新建应用</a>
+    </div>
+    <div class="card account">
+      <div>
+        <div class="label">邮箱</div>
+        <div class="email">${escapeHtml(email)}</div>
+      </div>
+      <span class="hint">暂不支持修改</span>
     </div>
     ${list}`,
   );

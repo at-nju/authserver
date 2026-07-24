@@ -82,11 +82,12 @@ app.post("/logout", async (c) => {
 });
 
 app.get("/apps", requireSession, async (c) => {
+  const session = c.get("session");
   const clients =
     ((await c.get("auth").api.getOAuthClients({ headers: c.req.raw.headers })) as
       | OAuthClientView[]
       | null) ?? [];
-  return c.html(appsPage(userLabel(c.get("session")), clients));
+  return c.html(appsPage(userLabel(session), session.user.email, clients));
 });
 
 app.get("/apps/new", requireSession, (c) =>
@@ -111,7 +112,7 @@ app.post("/apps", requireSession, async (c) => {
     body: {
       client_name: name,
       redirect_uris: redirectUris,
-      scope: "openid profile offline_access",
+      scope: "openid profile email offline_access",
       token_endpoint_auth_method: isConfidential ? "client_secret_basic" : "none",
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],

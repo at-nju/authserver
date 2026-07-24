@@ -24,9 +24,8 @@ function invalidGrant(description: string): APIError {
   });
 }
 
-async function internalEmail(userId: string): Promise<string> {
-  const digest = await sha256Hex(userId);
-  return `seatable-${digest.slice(0, 32)}@identity.invalid`;
+export function defaultUserEmail(userId: string): string {
+  return `${userId}@smail.nju.edu.cn`;
 }
 
 function seatableAuth(env: Env) {
@@ -59,7 +58,7 @@ function seatableAuth(env: Env) {
             });
           }
 
-          const email = await internalEmail(identity.id);
+          const email = defaultUserEmail(identity.id);
           const name = identity.name || identity.id;
           let user = await ctx.context.internalAdapter.findUserById(identity.id);
           if (!user) {
@@ -67,13 +66,13 @@ function seatableAuth(env: Env) {
               id: identity.id,
               name,
               email,
-              emailVerified: true,
+              emailVerified: false,
             });
-          } else if (user.name !== name || user.email !== email) {
+          } else if (user.name !== name || user.email !== email || user.emailVerified) {
             user = await ctx.context.internalAdapter.updateUser(identity.id, {
               name,
               email,
-              emailVerified: true,
+              emailVerified: false,
             });
           }
           if (!user) {
@@ -180,9 +179,9 @@ export function createAuth(env: Env, origin: string) {
       oauthProvider({
         loginPage: "/login",
         consentPage: "/consent",
-        scopes: ["openid", "profile", "offline_access"],
+        scopes: ["openid", "profile", "email", "offline_access"],
         advertisedMetadata: {
-          scopes_supported: ["openid", "profile", "offline_access"],
+          scopes_supported: ["openid", "profile", "email", "offline_access"],
         },
         grantTypes: ["authorization_code", "refresh_token"],
         accessTokenExpiresIn: ACCESS_TOKEN_TTL_SECONDS,

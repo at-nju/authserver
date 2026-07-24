@@ -7,7 +7,7 @@
 - **Cloudflare D1**：用户、会话、客户端、授权、令牌、consent 与 JWKS。
 - **SeaTable `Table1`**：外部身份源，只读查询 `ID`、`Name`、`Token`。
 
-登录时，SeaTable `ID` 直接作为 Better Auth user id，因此也是稳定 OIDC `sub`。内部占位 email 不对外提供；本服务不声明 `email` scope。
+登录时，SeaTable `ID` 直接作为 Better Auth user id，因此也是稳定 OIDC `sub`。默认邮箱为 `<ID>@smail.nju.edu.cn`，当前不执行邮箱验证，因此 `email_verified` 为 `false`。
 
 ## 标准端点
 

@@ -6,7 +6,7 @@
 
 - OIDC Authorization Code Flow + PKCE（仅 `S256`）
 - `id_token`、JWKS、Discovery、UserInfo、Introspection、Revocation、RP-Initiated Logout
-- `openid profile offline_access` scopes
+- `openid profile email offline_access` scopes
 - SeaTable Token 登录，`ID` 作为稳定 `sub`，`Name` 作为展示名
 - `/console` 自助管理公开或机密客户端
 - access token 1 小时，refresh token 30 天；SeaTable Token 轮换后拒绝继续刷新

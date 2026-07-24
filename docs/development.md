@@ -46,7 +46,7 @@ CHALLENGE=$(printf '%s' "$VERIFIER" | openssl dgst -binary -sha256 | openssl bas
 浏览器打开：
 
 ```text
-http://localhost:8787/oauth2/authorize?response_type=code&client_id=<client_id>&redirect_uri=<redirect_uri>&scope=openid%20profile%20offline_access&state=<random>&nonce=<random>&code_challenge=<challenge>&code_challenge_method=S256
+http://localhost:8787/oauth2/authorize?response_type=code&client_id=<client_id>&redirect_uri=<redirect_uri>&scope=openid%20profile%20email%20offline_access&state=<random>&nonce=<random>&code_challenge=<challenge>&code_challenge_method=S256
 ```
 
 登录、同意后，从回调 URL 取得 `code`：
