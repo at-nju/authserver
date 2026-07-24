@@ -92,9 +92,9 @@ export function appsPage(
 ): string {
   const list = clients.length
     ? clients
-        .map((client) => {
-          const name = client.client_name ?? client.client_id;
-          return `<div class="card">
+      .map((client) => {
+        const name = client.client_name ?? client.client_id;
+        return `<div class="card">
       <div class="row" style="margin:0">
         <div>
           <strong>${escapeHtml(name)}</strong>${badgeHtml(client)}
@@ -103,8 +103,8 @@ export function appsPage(
         <a class="btn ghost" href="/console/apps/${encodeURIComponent(client.client_id)}">管理</a>
       </div>
     </div>`;
-        })
-        .join("\n")
+      })
+      .join("\n")
     : `<div class="card empty">还没有应用，点右上角「新建应用」开始接入。</div>`;
 
   return shell(
@@ -118,7 +118,6 @@ export function appsPage(
       <div>
         <div class="label">邮箱</div>
         <div class="email">${escapeHtml(email)}</div>
-        <div style="margin-top:.45rem"><span class="badge verified">已验证</span></div>
       </div>
       <a class="btn ghost" href="/console/account/email">修改邮箱</a>
     </div>
@@ -179,14 +178,13 @@ export function emailSettingsPage(options: EmailSettingsPageOptions): string {
           <div class="label">当前邮箱</div>
           <div class="email">${escapeHtml(options.currentEmail)}</div>
         </div>
-        <span class="badge verified">已验证</span>
       </div>
       <form method="post" action="/console/account/email/send">
         <label>新邮箱</label>
-        <input type="email" name="new_email" placeholder="学号@smail.nju.edu.cn 或 name@nju.edu.cn"
+        <input type="email" name="new_email" placeholder="id@smail.nju.edu.cn 或 name@nju.edu.cn"
                value="${escapeHtml(options.pendingEmail ?? "")}" required
                ${options.smtpConfigured ? "" : "disabled"}>
-        <p class="hint">smail.nju.edu.cn 的 @ 前只能是数字；nju.edu.cn 支持常见邮箱字符。</p>
+        <p class="hint">id 只能是数字；name 支持常见邮箱字符。</p>
         <div class="actions">
           <button class="btn primary" type="submit" ${options.smtpConfigured ? "" : "disabled"}>发送验证码</button>
         </div>
