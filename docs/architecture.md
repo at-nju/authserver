@@ -7,7 +7,7 @@
 - **Cloudflare D1**：用户、会话、客户端、授权、令牌、consent 与 JWKS。
 - **SeaTable `Table1`**：外部身份源，只读查询 `ID`、`Name`、`Token`。
 
-登录时，SeaTable `ID` 直接作为 Better Auth user id，因此也是稳定 OIDC `sub`。默认邮箱为 `<ID>@smail.nju.edu.cn`，当前不执行邮箱验证，因此 `email_verified` 为 `false`。
+登录时，SeaTable `ID` 直接作为 Better Auth user id，因此也是稳定 OIDC `sub`。首次创建账号时默认邮箱为 `<ID>@smail.nju.edu.cn`，直接视为可信；后续登录只同步展示名，不覆盖用户已经修改的邮箱。所有保存在用户表中的邮箱都已验证，因此 OIDC `email_verified` 为 `true`。
 
 OIDC ID Token 使用 2048-bit RSA 密钥和 `RS256` 签名。公钥通过 `/jwks` 发布；私钥由 Better Auth 加密后保存在 D1。
 
@@ -42,6 +42,17 @@ Better Auth 在 `oauthClient.userId` 中保存 owner，所有读取、修改、�
 
 公开客户端使用 `token_endpoint_auth_method=none` 且强制 PKCE；机密客户端使用 `client_secret_basic`。
 
+## 邮箱修改
+
+管理后台允许把当前邮箱切换为以下两类地址：
+
+- `@smail.nju.edu.cn`：本地部分必须为 1–64 位数字。
+- `@nju.edu.cn`：本地部分采用常见 ASCII dot-atom 邮箱格式。
+
+地址统一转为小写，并通过 `lower(email)` 唯一索引保证大小写不敏感的全局唯一性。修改流程只在浏览器当前页面中存在：服务端在 Better Auth 的 `verification` 表保存一条最多 10 分钟的 OTP 哈希记录，不在用户表保存 `pendingEmail`，验证成功后立即消费记录并替换当前邮箱。
+
+验证码为 6 位数字，最多输错 5 次。发送限制只按登录账号计算：2 分钟最多 1 封、每小时最多 3 封、每天最多 6 封。计数保存在 `emailChangeRateLimit`，不记录 IP、目标邮箱或邮箱修改历史。邮件由 `noreply@nju.at` 通过飞书 SMTP (`smtp.feishu.cn:465`, implicit TLS) 发送。
+
 ## SeaTable Token 轮换
 
 登录会话记录当时的 `sha256(Token)`。使用 refresh token 时：
@@ -55,6 +66,7 @@ SeaTable 暂时不可达时保持旧行为：刷新 fail-open，避免身份源�
 ## 安全边界
 
 - 授权码与令牌只以哈希形式持久化。
+- 邮箱验证码使用绑定 user id、目标邮箱和主密钥的 HMAC-SHA-256 哈希保存。
 - `id_token` 使用 D1 中的 2048-bit RSA JWKS，以 `RS256` 签名。
 - 控制台回跳只允许 `/console` 下的本地路径。
 - RFC 8707 `resource` 参数未启用，并在 Worker 入口直接返回 `invalid_request`。
@@ -66,6 +78,9 @@ SeaTable 暂时不可达时保持旧行为：刷新 fail-open，避免身份源�
 src/auth.ts           Better Auth、OIDC 配置、SeaTable 登录与刷新校验
 src/index.ts          页面、兼容路由、Provider 挂载
 src/console.ts        客户端管理后台
+src/email_change.ts   邮箱 OTP、账号限流与原子替换
+src/email_policy.ts   南大邮箱格式与规范化规则
+src/smtp.ts           飞书 SMTP 投递
 src/security.ts       请求边界安全策略
 src/seatable.ts       SeaTable 只读身份查询
 src/views.ts          登录与 consent 页面

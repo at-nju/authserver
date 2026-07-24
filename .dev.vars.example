@@ -1,0 +1,3 @@
+SEATABLE_API_TOKEN=replace-with-seatable-api-token
+CONSOLE_SESSION_SECRET=replace-with-at-least-32-random-bytes
+FEISHU_SMTP_PASSWORD=replace-with-noreply-at-nju-dot-at-app-password

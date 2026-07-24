@@ -17,9 +17,10 @@ npm run db:migrate:remote
 ```bash
 npx wrangler secret put SEATABLE_API_TOKEN
 npx wrangler secret put CONSOLE_SESSION_SECRET
+npx wrangler secret put FEISHU_SMTP_PASSWORD
 ```
 
-`CONSOLE_SESSION_SECRET` 是沿用旧名称的 Better Auth 主密钥，至少使用 32 字节随机值；不要写进仓库。`SEATABLE_SERVER_URL` 在 `wrangler.toml` 中配置。
+`CONSOLE_SESSION_SECRET` 是沿用旧名称的 Better Auth 主密钥，至少使用 32 字节随机值；不要写进仓库。`FEISHU_SMTP_PASSWORD` 是飞书为 `noreply@nju.at` 生成的第三方客户端专用密码。SMTP 固定连接 `smtp.feishu.cn:465` 并使用 implicit TLS。`SEATABLE_SERVER_URL` 在 `wrangler.toml` 中配置。
 
 完成验证后部署：
 
@@ -38,6 +39,8 @@ npx wrangler deploy
 - 旧 `OAUTH_KV` / `CONSOLE_KV` 未删除，可作为切换后的短期回滚备份；新 Worker 不再绑定它们。
 
 不要把一次性的旧客户端迁移 SQL提交进仓库，其中包含不可逆但仍应保护的客户端密钥哈希。
+
+邮箱功能使用 `0004_verified_email_change.sql`：将已有邮箱规范化为小写并标记为已验证，增加大小写不敏感唯一索引和按账号计数的发送限流表。迁移不会创建待验证邮箱字段，也不会保存邮箱修改历史。
 
 ## 回滚
 

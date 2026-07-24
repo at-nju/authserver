@@ -86,10 +86,12 @@ GET ISSUER/oauth2/userinfo
 Authorization: Bearer <access_token>
 ```
 
-`sub` 是 SeaTable `ID`，稳定且唯一；`name` 来自 SeaTable `Name`。请求 `email` scope 后，ID Token 与 UserInfo 会包含：
+`sub` 是 SeaTable `ID`，稳定且唯一；`name` 来自 SeaTable `Name`。首次创建账号时邮箱默认为 `<sub>@smail.nju.edu.cn`，用户可在管理后台验证并切换为允许的 `@smail.nju.edu.cn` 或 `@nju.edu.cn` 地址。请求 `email` scope 后，ID Token 与 UserInfo 会包含：
 
-- `email`：默认值为 `<sub>@smail.nju.edu.cn`
-- `email_verified`：当前固定为 `false`，尚未接入邮箱验证
+- `email`：签发时账号当前保存的邮箱
+- `email_verified`：固定为 `true`；默认邮箱受身份规则信任，修改后的邮箱在写入前完成 OTP 验证
+
+邮箱修改不会撤销已有会话、access token、refresh token 或 consent。已经签发的 ID Token 内容不会变化；后续签发的 Token 使用新邮箱。UserInfo 会读取账号当前邮箱，因此同一有效 access token 后续查询时可能看到更新后的值。
 
 ## 刷新、撤销与退出
 

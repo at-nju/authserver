@@ -13,7 +13,10 @@ npm run dev
 ```dotenv
 SEATABLE_API_TOKEN=...
 CONSOLE_SESSION_SECRET=至少 32 字节的随机值
+FEISHU_SMTP_PASSWORD=noreply@nju.at 的飞书邮箱专用密码
 ```
+
+也可以复制 `.dev.vars.example` 后填写。没有 `FEISHU_SMTP_PASSWORD` 时 Worker 仍可启动，邮箱修改页面会明确显示邮件服务未配置并禁用发送按钮。
 
 ## 常规验证
 

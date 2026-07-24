@@ -9,6 +9,7 @@
 - 使用 2048-bit RSA / RS256 签名 OIDC Token，兼容 Cloudflare Access
 - `openid profile email offline_access` scopes
 - SeaTable Token 登录，`ID` 作为稳定 `sub`，`Name` 作为展示名
+- 默认邮箱为 `<ID>@smail.nju.edu.cn`；后台可验证并切换到允许的南大邮箱
 - `/console` 自助管理公开或机密客户端
 - access token 1 小时，refresh token 30 天；SeaTable Token 轮换后拒绝继续刷新
 - 旧 `/authorize`、`/token`、`/userinfo` 路径保留兼容
@@ -26,6 +27,7 @@ npm run dev
 ```dotenv
 SEATABLE_API_TOKEN=...
 CONSOLE_SESSION_SECRET=至少 32 字节的随机值
+FEISHU_SMTP_PASSWORD=noreply@nju.at 的飞书邮箱专用密码
 ```
 
 ## 验证
