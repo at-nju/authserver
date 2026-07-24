@@ -257,6 +257,11 @@ export async function startEmailChange(
 
   await consumeEmailSendAllowance(options.db, options.userId, now);
   const expiresAt = now + OTP_EXPIRES_MS;
+  const identifier = verificationIdentifier(options.userId);
+  await options.db
+    .prepare(`DELETE FROM "verification" WHERE "identifier" = ?`)
+    .bind(identifier)
+    .run();
   if (await emailBelongsToAnotherUser(options.db, options.userId, options.newEmail)) {
     return { sent: false, expiresAt };
   }
@@ -273,27 +278,22 @@ export async function startEmailChange(
     attempts: 0,
   };
   const id = crypto.randomUUID();
-  const identifier = verificationIdentifier(options.userId);
   const createdAt = new Date(now).toISOString();
-  await options.db.batch([
-    options.db
-      .prepare(`DELETE FROM "verification" WHERE "identifier" = ?`)
-      .bind(identifier),
-    options.db
-      .prepare(
-        `INSERT INTO "verification"
-          ("id", "identifier", "value", "expiresAt", "createdAt", "updatedAt")
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        id,
-        identifier,
-        JSON.stringify(verification),
-        new Date(expiresAt).toISOString(),
-        createdAt,
-        createdAt,
-      ),
-  ]);
+  await options.db
+    .prepare(
+      `INSERT INTO "verification"
+        ("id", "identifier", "value", "expiresAt", "createdAt", "updatedAt")
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      id,
+      identifier,
+      JSON.stringify(verification),
+      new Date(expiresAt).toISOString(),
+      createdAt,
+      createdAt,
+    )
+    .run();
 
   try {
     await options.send(options.newEmail, otp);
@@ -334,95 +334,117 @@ export async function confirmEmailChange(
 ): Promise<ConfirmEmailChangeResult> {
   const now = options.now ?? Date.now();
   const identifier = verificationIdentifier(options.userId);
-  const row = await options.db
-    .prepare(
-      `SELECT "id", "value", "expiresAt" FROM "verification"
-       WHERE "identifier" = ? ORDER BY "createdAt" DESC LIMIT 1`,
-    )
-    .bind(identifier)
-    .first<VerificationRow>();
-
-  if (!row || new Date(row.expiresAt).getTime() <= now) {
-    if (row) {
-      await options.db
-        .prepare(`DELETE FROM "verification" WHERE "id" = ?`)
-        .bind(row.id)
-        .run();
-    }
-    return { ok: false, reason: "expired" };
-  }
-
-  const verification = parseVerification(row.value);
   const submittedHash = await hashEmailOtp(
     options.secret,
     options.userId,
     options.newEmail,
     options.otp,
   );
-  if (
-    !verification ||
-    verification.email !== options.newEmail ||
-    !equalHex(verification.otpHash, submittedHash)
-  ) {
-    const nextAttempts = (verification?.attempts ?? 0) + 1;
-    if (nextAttempts >= OTP_MAX_ATTEMPTS) {
+
+  for (let contentionRetry = 0; contentionRetry <= OTP_MAX_ATTEMPTS; contentionRetry += 1) {
+    const row = await options.db
+      .prepare(
+        `SELECT "id", "value", "expiresAt" FROM "verification"
+         WHERE "identifier" = ? ORDER BY "createdAt" DESC LIMIT 1`,
+      )
+      .bind(identifier)
+      .first<VerificationRow>();
+
+    if (!row || new Date(row.expiresAt).getTime() <= now) {
+      if (row) {
+        await options.db
+          .prepare(`DELETE FROM "verification" WHERE "id" = ?`)
+          .bind(row.id)
+          .run();
+      }
+      return { ok: false, reason: "expired" };
+    }
+
+    const verification = parseVerification(row.value);
+    if (!verification) {
       await options.db
         .prepare(`DELETE FROM "verification" WHERE "id" = ? AND "value" = ?`)
         .bind(row.id, row.value)
         .run();
-    } else if (verification) {
-      await options.db
-        .prepare(
-          `UPDATE "verification" SET "value" = ?, "updatedAt" = ?
-           WHERE "id" = ? AND "value" = ?`,
-        )
-        .bind(
-          JSON.stringify({ ...verification, attempts: nextAttempts }),
-          new Date(now).toISOString(),
-          row.id,
-          row.value,
-        )
-        .run();
+      return { ok: false, reason: "expired" };
     }
-    return {
-      ok: false,
-      reason: "invalid",
-      attemptsRemaining: Math.max(0, OTP_MAX_ATTEMPTS - nextAttempts),
-    };
-  }
 
-  if (await emailBelongsToAnotherUser(options.db, options.userId, options.newEmail)) {
-    await options.db
-      .prepare(`DELETE FROM "verification" WHERE "id" = ? AND "value" = ?`)
-      .bind(row.id, row.value)
-      .run();
-    return { ok: false, reason: "in-use" };
-  }
+    if (
+      verification.email !== options.newEmail ||
+      !equalHex(verification.otpHash, submittedHash)
+    ) {
+      const nextAttempts = verification.attempts + 1;
+      const result = nextAttempts >= OTP_MAX_ATTEMPTS
+        ? await options.db
+            .prepare(`DELETE FROM "verification" WHERE "id" = ? AND "value" = ?`)
+            .bind(row.id, row.value)
+            .run()
+        : await options.db
+            .prepare(
+              `UPDATE "verification" SET "value" = ?, "updatedAt" = ?
+               WHERE "id" = ? AND "value" = ?`,
+            )
+            .bind(
+              JSON.stringify({ ...verification, attempts: nextAttempts }),
+              new Date(now).toISOString(),
+              row.id,
+              row.value,
+            )
+            .run();
+      if ((result.meta.changes ?? 0) === 0) continue;
+      return {
+        ok: false,
+        reason: "invalid",
+        attemptsRemaining: Math.max(0, OTP_MAX_ATTEMPTS - nextAttempts),
+      };
+    }
 
-  const consumed = await options.db
-    .prepare(`DELETE FROM "verification" WHERE "id" = ? AND "value" = ?`)
-    .bind(row.id, row.value)
-    .run();
-  if ((consumed.meta.changes ?? 0) !== 1) {
-    return { ok: false, reason: "expired" };
-  }
-
-  try {
-    await options.db
-      .prepare(
-        `UPDATE "user" SET "email" = ?, "emailVerified" = 1, "updatedAt" = ?
-         WHERE "id" = ?`,
-      )
-      .bind(options.newEmail, new Date(now).toISOString(), options.userId)
-      .run();
-  } catch (error) {
-    if (error instanceof Error && /unique|constraint/i.test(error.message)) {
+    if (await emailBelongsToAnotherUser(options.db, options.userId, options.newEmail)) {
+      await options.db
+        .prepare(`DELETE FROM "verification" WHERE "id" = ? AND "value" = ?`)
+        .bind(row.id, row.value)
+        .run();
       return { ok: false, reason: "in-use" };
     }
-    throw error;
+
+    try {
+      const [updated, consumed] = await options.db.batch([
+        options.db
+          .prepare(
+            `UPDATE "user" SET "email" = ?, "emailVerified" = 1, "updatedAt" = ?
+             WHERE "id" = ? AND EXISTS (
+               SELECT 1 FROM "verification" WHERE "id" = ? AND "value" = ?
+             )`,
+          )
+          .bind(
+            options.newEmail,
+            new Date(now).toISOString(),
+            options.userId,
+            row.id,
+            row.value,
+          ),
+        options.db
+          .prepare(`DELETE FROM "verification" WHERE "id" = ? AND "value" = ?`)
+          .bind(row.id, row.value),
+      ]);
+      const updatedCount = updated?.meta.changes ?? 0;
+      const consumedCount = consumed?.meta.changes ?? 0;
+      if (updatedCount === 1 && consumedCount === 1) return { ok: true };
+      if (updatedCount === 0 && consumedCount === 0) continue;
+      throw new Error("Email verification transaction produced an inconsistent result");
+    } catch (error) {
+      if (error instanceof Error && /unique|constraint/i.test(error.message)) {
+        await options.db
+          .prepare(`DELETE FROM "verification" WHERE "id" = ? AND "value" = ?`)
+          .bind(row.id, row.value)
+          .run();
+        return { ok: false, reason: "in-use" };
+      }
+      throw error;
+    }
   }
 
-  return { ok: true };
+  return { ok: false, reason: "expired" };
 }
 
 export const EMAIL_CHANGE_POLICY = {
