@@ -24,6 +24,7 @@ const STYLE = `
   .badge { font-size: .72rem; padding: .15rem .5rem; border-radius: 999px; margin-left: .5rem; }
   .badge.pub { background: #ecfdf5; color: #047857; }
   .badge.conf { background: #eff6ff; color: #1d4ed8; }
+  .badge.verified { background: #ecfdf5; color: #047857; margin-left: 0; }
   a.btn, button.btn { display: inline-block; padding: .55rem .9rem; border-radius: 8px; border: 0;
           font-size: .9rem; cursor: pointer; text-decoration: none; }
   .btn.primary { background: #2563eb; color: #fff; }
@@ -31,7 +32,7 @@ const STYLE = `
   .btn.ghost { background: #f3f4f6; color: #374151; }
   .btn.danger { background: #fef2f2; color: #b91c1c; }
   label { display: block; font-size: .85rem; margin: 1rem 0 .35rem; }
-  input[type=text], textarea { width: 100%; box-sizing: border-box; padding: .55rem .65rem;
+  input[type=text], input[type=email], input[type=number], textarea { width: 100%; box-sizing: border-box; padding: .55rem .65rem;
           border: 1px solid #ccc; border-radius: 8px; font-size: .95rem; font-family: inherit; }
   textarea { min-height: 90px; }
   .hint { color: #6b7280; font-size: .8rem; margin-top: .3rem; }
@@ -41,6 +42,8 @@ const STYLE = `
             border-radius: 8px; padding: .7rem; word-break: break-all; }
   .warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: .7rem .85rem;
           border-radius: 8px; font-size: .85rem; }
+  .success { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: .7rem .85rem;
+             border-radius: 8px; font-size: .85rem; }
   .empty { color: #6b7280; text-align: center; padding: 2rem; }
   .account { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
   .account .label { color: #6b7280; font-size: .8rem; margin-bottom: .2rem; }
@@ -115,10 +118,81 @@ export function appsPage(
       <div>
         <div class="label">邮箱</div>
         <div class="email">${escapeHtml(email)}</div>
+        <div style="margin-top:.45rem"><span class="badge verified">已验证</span></div>
       </div>
-      <span class="hint">暂不支持修改</span>
+      <a class="btn ghost" href="/console/account/email">修改邮箱</a>
     </div>
     ${list}`,
+  );
+}
+
+export interface EmailSettingsPageOptions {
+  userLabel: string;
+  currentEmail: string;
+  smtpConfigured: boolean;
+  pendingEmail?: string;
+  error?: string;
+  notice?: string;
+  success?: string;
+}
+
+export function emailSettingsPage(options: EmailSettingsPageOptions): string {
+  const error = options.error
+    ? `<div class="warn">${escapeHtml(options.error)}</div>`
+    : "";
+  const notice = options.notice
+    ? `<div class="success">${escapeHtml(options.notice)}</div>`
+    : "";
+  const success = options.success
+    ? `<div class="success">${escapeHtml(options.success)}</div>`
+    : "";
+  const configurationWarning = options.smtpConfigured
+    ? ""
+    : `<div class="warn">邮件发送服务尚未配置，暂时无法发送验证码。</div>`;
+  const verificationForm = options.pendingEmail
+    ? `<div class="card">
+        <h2>输入验证码</h2>
+        <p class="hint">验证码已发送至 ${escapeHtml(options.pendingEmail)}，10 分钟内有效。</p>
+        <form method="post" action="/console/account/email/confirm">
+          <input type="hidden" name="new_email" value="${escapeHtml(options.pendingEmail)}">
+          <label>6 位验证码</label>
+          <input type="text" name="otp" inputmode="numeric" autocomplete="one-time-code"
+                 pattern="[0-9]{6}" maxlength="6" required autofocus>
+          <div class="actions">
+            <button class="btn primary" type="submit">验证并修改</button>
+          </div>
+        </form>
+      </div>`
+    : "";
+
+  return shell(
+    "修改邮箱",
+    options.userLabel,
+    `<div class="row">
+      <h1>修改邮箱</h1>
+      <a class="btn ghost" href="/console/apps">返回</a>
+    </div>
+    ${error}${notice}${success}${configurationWarning}
+    <div class="card">
+      <div class="account">
+        <div>
+          <div class="label">当前邮箱</div>
+          <div class="email">${escapeHtml(options.currentEmail)}</div>
+        </div>
+        <span class="badge verified">已验证</span>
+      </div>
+      <form method="post" action="/console/account/email/send">
+        <label>新邮箱</label>
+        <input type="email" name="new_email" placeholder="学号@smail.nju.edu.cn 或 name@nju.edu.cn"
+               value="${escapeHtml(options.pendingEmail ?? "")}" required
+               ${options.smtpConfigured ? "" : "disabled"}>
+        <p class="hint">smail.nju.edu.cn 的 @ 前只能是数字；nju.edu.cn 支持常见邮箱字符。</p>
+        <div class="actions">
+          <button class="btn primary" type="submit" ${options.smtpConfigured ? "" : "disabled"}>发送验证码</button>
+        </div>
+      </form>
+    </div>
+    ${verificationForm}`,
   );
 }
 

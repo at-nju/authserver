@@ -1,13 +1,22 @@
 import { Hono, type Context, type Next } from "hono";
 import type { Auth, AuthSession } from "./auth";
+import {
+  confirmEmailChange,
+  EmailChangeRequestError,
+  EmailSendRateLimitError,
+  startEmailChange,
+} from "./email_change";
+import { normalizeNjuEmail } from "./email_policy";
 import type { Env } from "./env";
 import {
   appsPage,
+  emailSettingsPage,
   editAppPage,
   newAppPage,
   secretRevealPage,
   type OAuthClientView,
 } from "./console_views";
+import { isEmailDeliveryConfigured, sendVerificationEmail } from "./smtp";
 import { loginPage } from "./views";
 
 const LOGIN_TITLE = "管理后台登录";
@@ -68,6 +77,28 @@ async function getOwnedClient(c: AppContext, clientId: string): Promise<OAuthCli
   }
 }
 
+function emailPage(
+  c: AppContext,
+  options: {
+    pendingEmail?: string;
+    error?: string;
+    notice?: string;
+    success?: string;
+  } = {},
+  status: 200 | 400 | 429 | 503 = 200,
+) {
+  const session = c.get("session");
+  return c.html(
+    emailSettingsPage({
+      userLabel: userLabel(session),
+      currentEmail: session.user.email,
+      smtpConfigured: isEmailDeliveryConfigured(c.env),
+      ...options,
+    }),
+    status,
+  );
+}
+
 app.get("/", (c) => c.redirect("/console/apps"));
 app.get("/login", (c) => c.html(consoleLoginPage()));
 
@@ -88,6 +119,113 @@ app.get("/apps", requireSession, async (c) => {
       | OAuthClientView[]
       | null) ?? [];
   return c.html(appsPage(userLabel(session), session.user.email, clients));
+});
+
+app.get("/account/email", requireSession, (c) =>
+  emailPage(
+    c,
+    c.req.query("updated") === "1"
+      ? { success: "邮箱已更新，后续签发的 OIDC Token 将使用新邮箱。" }
+      : {},
+  ),
+);
+
+app.post("/account/email/send", requireSession, async (c) => {
+  const session = c.get("session");
+  if (!isEmailDeliveryConfigured(c.env)) {
+    return emailPage(c, { error: "邮件发送服务尚未配置。" }, 503);
+  }
+
+  const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
+  const normalized = normalizeNjuEmail(form.new_email ?? "");
+  if (!normalized.ok) return emailPage(c, { error: normalized.message }, 400);
+
+  try {
+    await startEmailChange({
+      db: c.env.AUTH_DB,
+      userId: session.user.id,
+      currentEmail: session.user.email,
+      newEmail: normalized.email,
+      secret: c.env.CONSOLE_SESSION_SECRET,
+      send: (email, otp) => sendVerificationEmail(c.env, email, otp),
+    });
+  } catch (error) {
+    if (error instanceof EmailSendRateLimitError) {
+      const minutes = Math.ceil(error.retryAfterSeconds / 60);
+      return emailPage(
+        c,
+        { error: `发送过于频繁，请约 ${minutes} 分钟后再试。` },
+        429,
+      );
+    }
+    if (error instanceof EmailChangeRequestError) {
+      return emailPage(
+        c,
+        {
+          error:
+            error.code === "same-email"
+              ? "新邮箱与当前邮箱相同。"
+              : "验证码邮件发送失败，请稍后重试。",
+        },
+        error.code === "same-email" ? 400 : 503,
+      );
+    }
+    throw error;
+  }
+
+  return emailPage(c, {
+    pendingEmail: normalized.email,
+    notice: "如果该邮箱可用，验证码已经发送。请在 10 分钟内完成验证。",
+  });
+});
+
+app.post("/account/email/confirm", requireSession, async (c) => {
+  const session = c.get("session");
+  const form = Object.fromEntries(await c.req.formData()) as Record<string, string>;
+  const normalized = normalizeNjuEmail(form.new_email ?? "");
+  if (!normalized.ok) return emailPage(c, { error: normalized.message }, 400);
+  const otp = (form.otp ?? "").trim();
+  if (!/^\d{6}$/.test(otp)) {
+    return emailPage(
+      c,
+      { pendingEmail: normalized.email, error: "请输入 6 位数字验证码。" },
+      400,
+    );
+  }
+
+  const result = await confirmEmailChange({
+    db: c.env.AUTH_DB,
+    userId: session.user.id,
+    newEmail: normalized.email,
+    otp,
+    secret: c.env.CONSOLE_SESSION_SECRET,
+  });
+  if (result.ok) return c.redirect("/console/account/email?updated=1");
+
+  if (result.reason === "invalid") {
+    const suffix = result.attemptsRemaining
+      ? `，还可尝试 ${result.attemptsRemaining} 次`
+      : "，该验证码已失效";
+    return emailPage(
+      c,
+      {
+        pendingEmail: normalized.email,
+        error: `验证码不正确${suffix}。`,
+      },
+      400,
+    );
+  }
+  return emailPage(
+    c,
+    {
+      pendingEmail: normalized.email,
+      error:
+        result.reason === "in-use"
+          ? "该邮箱已被其他账号使用。"
+          : "验证码已过期或已使用，请重新发送。",
+    },
+    400,
+  );
 });
 
 app.get("/apps/new", requireSession, (c) =>
