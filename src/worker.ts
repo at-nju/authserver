@@ -100,7 +100,7 @@ export default {
       );
     }
 
-    let response = await getAuth(env).handler(request);
+    let response = await getAuth(env, url.origin).handler(request);
     if (path.startsWith("/.well-known/")) response = await cleanMetadata(response);
     if (path === "/oauth2/authorize") response = await browserRedirect(response);
     return response;

@@ -121,10 +121,12 @@ function seaTablePlugin(env: Bindings) {
   } satisfies BetterAuthPlugin;
 }
 
-export function createAuth(env: Bindings) {
+export function createAuth(env: Bindings, baseURL: string) {
   return betterAuth({
     appName: config.appName,
+    baseURL,
     basePath: config.auth.basePath,
+    trustedOrigins: [baseURL],
     secret: env.BETTER_AUTH_SECRET,
     database: env.AUTH_DB,
     rateLimit: { enabled: false },
@@ -173,5 +175,11 @@ export function createAuth(env: Bindings) {
   });
 }
 
-let auth: ReturnType<typeof createAuth> | undefined;
-export const getAuth = (env: Bindings) => auth ??= createAuth(env);
+const auth = new Map<string, ReturnType<typeof createAuth>>();
+export function getAuth(env: Bindings, baseURL: string) {
+  const cached = auth.get(baseURL);
+  if (cached) return cached;
+  const created = createAuth(env, baseURL);
+  auth.set(baseURL, created);
+  return created;
+}
