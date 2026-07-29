@@ -166,6 +166,58 @@ describe("authentication flow", () => {
       email_verified: true,
     });
 
+    const updateClient = await auth.handler(new Request("http://local.test/oauth2/update-client", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        client_id: clientBody.client_id,
+        update: {
+          client_name: "Updated Client",
+          redirect_uris: ["http://127.0.0.1/updated"],
+        },
+      }),
+    }));
+    expect(updateClient.status).toBe(200);
+
+    const confidential = await auth.handler(new Request("http://local.test/oauth2/create-client", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        client_name: "Confidential Client",
+        redirect_uris: ["https://client.example/callback"],
+        token_endpoint_auth_method: "client_secret_basic",
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+        type: "web",
+      }),
+    }));
+    const confidentialBody = await confidential.json() as { client_id: string; client_secret: string };
+    expect(confidentialBody.client_secret).toBeTruthy();
+
+    const rotated = await auth.handler(new Request("http://local.test/oauth2/client/rotate-secret", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ client_id: confidentialBody.client_id }),
+    }));
+    const rotatedBody = await rotated.json() as { client_secret: string };
+    expect(rotatedBody.client_secret).not.toBe(confidentialBody.client_secret);
+
+    const removed = await auth.handler(new Request("http://local.test/oauth2/delete-client", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ client_id: confidentialBody.client_id }),
+    }));
+    expect(removed.status).toBe(200);
+
+    const clients = await auth.handler(new Request("http://local.test/oauth2/get-clients", { headers }));
+    expect(await clients.json()).toEqual([
+      expect.objectContaining({
+        client_id: clientBody.client_id,
+        client_name: "Updated Client",
+        redirect_uris: ["http://127.0.0.1/updated"],
+      }),
+    ]);
+
     db.close();
   });
 });
