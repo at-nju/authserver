@@ -14,5 +14,5 @@
     "jsxImportSource": "preact",
     "types": ["@cloudflare/workers-types", "node", "vite/client"]
   },
-  "include": ["config.ts", "src", "web", "tests", "auth.config.ts", "vite.config.ts", "vitest.config.ts"]
+  "include": ["config.ts", "src", "web", "tests", "vite.config.ts", "vitest.config.ts"]
 }

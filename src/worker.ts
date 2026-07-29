@@ -29,7 +29,7 @@ async function hasResource(request: Request): Promise<boolean> {
   if (url.searchParams.has("resource")) return true;
   if (request.method !== "POST") return false;
 
-  const type = request.headers.get("content-type") ?? "";
+  const type = request.headers.get("content-type")?.toLowerCase() ?? "";
   try {
     if (type.includes("application/json")) {
       return Object.hasOwn(await request.clone().json<Record<string, unknown>>(), "resource");

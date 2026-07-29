@@ -4,7 +4,13 @@ import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuth, type Bindings } from "../src/auth";
 
-afterEach(() => vi.unstubAllGlobals());
+const { mailSend } = vi.hoisted(() => ({ mailSend: vi.fn() }));
+vi.mock("worker-mailer", () => ({ WorkerMailer: { send: mailSend } }));
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  mailSend.mockReset();
+});
 
 describe("authentication flow", () => {
   it("creates the default profile, session, and an OIDC client", async () => {
@@ -22,6 +28,18 @@ describe("authentication flow", () => {
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(Response.json({ access_token: "base-token", dtable_uuid: "base-id" }))
       .mockResolvedValueOnce(Response.json({ results: [{ ID: "student" }] })));
+
+    const blocked = await auth.handler(new Request("http://local.test/sign-in/seatable", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Sec-Fetch-Site": "cross-site",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Dest": "document",
+      },
+      body: JSON.stringify({ token: "user-token" }),
+    }));
+    expect(blocked.status).toBe(403);
 
     const login = await auth.handler(new Request("http://local.test/sign-in/seatable", {
       method: "POST",
@@ -47,6 +65,23 @@ describe("authentication flow", () => {
         onboardingCompleted: false,
       },
     });
+
+    const requestEmail = await auth.handler(new Request("http://local.test/email-otp/request-email-change", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ newEmail: "verified@example.com" }),
+    }));
+    expect(requestEmail.status).toBe(200);
+    const message = mailSend.mock.calls[0]?.[1] as { text: string };
+    const otp = message.text.match(/\d{6}/)?.[0];
+    expect(otp).toBeTruthy();
+
+    const changeEmail = await auth.handler(new Request("http://local.test/email-otp/change-email", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ newEmail: "verified@example.com", otp }),
+    }));
+    expect(changeEmail.status).toBe(200);
 
     const update = await auth.handler(new Request("http://local.test/update-user", {
       method: "POST",
@@ -127,8 +162,8 @@ describe("authentication flow", () => {
     expect(await userinfo.json()).toMatchObject({
       sub: "student",
       name: "Student Name",
-      email: "student@smail.nju.edu.cn",
-      email_verified: false,
+      email: "verified@example.com",
+      email_verified: true,
     });
 
     db.close();

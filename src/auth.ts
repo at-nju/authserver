@@ -1,7 +1,7 @@
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import type { BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthEndpoint, originCheck } from "better-auth/api";
+import { APIError, createAuthEndpoint, formCsrfMiddleware, originCheck } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { emailOTP, jwt } from "better-auth/plugins";
 import { z } from "zod";
@@ -82,7 +82,7 @@ function seaTablePlugin(env: Bindings) {
             oauth_query: z.string().optional(),
             return_to: z.string().optional(),
           }),
-          use: [originCheck((ctx) => ctx.body.return_to ?? "/")],
+          use: [formCsrfMiddleware, originCheck((ctx) => ctx.body.return_to ?? "/")],
         },
         async (ctx) => {
           let identity: { id: string } | null;
@@ -129,6 +129,7 @@ export function createAuth(env: Bindings, baseURL: string) {
     trustedOrigins: [baseURL],
     secret: env.BETTER_AUTH_SECRET,
     database: env.AUTH_DB,
+    advanced: { disableOriginCheck: false, disableCSRFCheck: false },
     rateLimit: { enabled: false },
     session: { expiresIn: config.auth.sessionTtlSeconds },
     user: {
