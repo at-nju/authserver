@@ -1,0 +1,32 @@
+{
+  "name": "authserver",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && vite build",
+    "dev": "npm run build && wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "npx auth@1.6.25 generate --config auth.config.ts --output migrations/0001_auth.sql --yes",
+    "db:migrate:local": "wrangler d1 migrations apply AUTH_DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply AUTH_DB --remote",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "dependencies": {
+    "@better-auth/oauth-provider": "1.6.25",
+    "better-auth": "1.6.25",
+    "preact": "10.29.7",
+    "worker-mailer": "1.2.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260729.1",
+    "@preact/preset-vite": "2.10.6",
+    "@types/node": "26.1.2",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.10",
+    "wrangler": "4.115.0"
+  }
+}
