@@ -6,7 +6,6 @@ export type Env = {
 
 export const config = {
   appName: "NJU Auth",
-  baseUrl: "https://auth.nju.at",
 
   auth: {
     basePath: "/",
@@ -35,8 +34,8 @@ export const config = {
     host: "smtp.feishu.cn",
     port: 465,
     secure: true,
-    username: "",
-    from: "",
+    username: "noreply@nju.at",
+    from: "noreply@nju.at",
   },
 
   oidc: {
