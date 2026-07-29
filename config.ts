@@ -1,18 +1,15 @@
 export type Env = {
-  PUBLIC_BASE_URL?: string;
   BETTER_AUTH_SECRET: string;
   SEATABLE_API_TOKEN: string;
-  SMTP_USERNAME: string;
   SMTP_PASSWORD: string;
-  SMTP_FROM: string;
 };
 
 export const config = {
   appName: "NJU Auth",
+  baseUrl: "https://auth.nju.at",
 
   auth: {
     basePath: "/",
-    defaultBaseUrl: "https://auth.nju.at",
     sessionTtlSeconds: 7 * 24 * 60 * 60,
   },
 
@@ -24,19 +21,22 @@ export const config = {
   },
 
   user: {
-    defaultEmailTemplate: "{id}@smail.nju.edu.cn",
+    defaultEmail: (id: string) => `${id}@smail.nju.edu.cn`,
   },
 
   email: {
     otpLength: 6,
     otpTtlSeconds: 10 * 60,
+    subject: "NJU Auth 邮箱验证码",
+    text: (otp: string) => `你的验证码是 ${otp}，10 分钟内有效。`,
   },
 
   smtp: {
     host: "smtp.feishu.cn",
     port: 465,
     secure: true,
-    authType: "login",
+    username: "",
+    from: "",
   },
 
   oidc: {
