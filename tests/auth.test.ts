@@ -1,0 +1,136 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAuth, type Bindings } from "../src/auth";
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("authentication flow", () => {
+  it("creates the default profile, session, and an OIDC client", async () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec(readFileSync("migrations/0001_auth.sql", "utf8"));
+    const env = {
+      AUTH_DB: db as unknown as D1Database,
+      ASSETS: {} as Fetcher,
+      BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret",
+      SEATABLE_API_TOKEN: "app-token",
+      SMTP_PASSWORD: "unused",
+    } satisfies Bindings;
+    const auth = createAuth(env, "http://local.test");
+
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(Response.json({ access_token: "base-token", dtable_uuid: "base-id" }))
+      .mockResolvedValueOnce(Response.json({ results: [{ ID: "student" }] })));
+
+    const login = await auth.handler(new Request("http://local.test/sign-in/seatable", {
+      method: "POST",
+      headers: { Origin: "http://local.test", "Content-Type": "application/json" },
+      body: JSON.stringify({ token: "user-token", return_to: "/console" }),
+    }));
+    expect(login.status).toBe(200);
+    expect(await login.clone().json()).toMatchObject({
+      url: "/onboarding?return_to=%2Fconsole",
+    });
+
+    const cookie = login.headers.get("set-cookie")?.split(";", 1)[0];
+    expect(cookie).toBeTruthy();
+    const headers = { Cookie: cookie!, Origin: "http://local.test", "Content-Type": "application/json" };
+
+    const session = await auth.handler(new Request("http://local.test/get-session", { headers }));
+    expect(await session.json()).toMatchObject({
+      user: {
+        id: "student",
+        name: "student",
+        email: "student@smail.nju.edu.cn",
+        emailVerified: false,
+        onboardingCompleted: false,
+      },
+    });
+
+    const update = await auth.handler(new Request("http://local.test/update-user", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: "Student Name", onboardingCompleted: true }),
+    }));
+    expect(update.status).toBe(200);
+
+    const client = await auth.handler(new Request("http://local.test/oauth2/create-client", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        client_name: "Test Client",
+        redirect_uris: ["http://127.0.0.1/callback"],
+        token_endpoint_auth_method: "none",
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+        type: "user-agent-based",
+      }),
+    }));
+    expect(client.status).toBe(200);
+    const clientBody = await client.json() as {
+      client_id: string;
+      client_name: string;
+      token_endpoint_auth_method: string;
+    };
+    expect(clientBody).toMatchObject({
+      client_name: "Test Client",
+      token_endpoint_auth_method: "none",
+    });
+
+    const verifier = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~";
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const authorizeUrl = new URL("http://local.test/oauth2/authorize");
+    authorizeUrl.search = new URLSearchParams({
+      client_id: clientBody.client_id,
+      redirect_uri: "http://127.0.0.1/callback",
+      response_type: "code",
+      scope: "openid profile email",
+      state: "state",
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    }).toString();
+    const authorize = await auth.handler(new Request(authorizeUrl, { headers }));
+    const authorizeLocation = authorize.headers.get("location")
+      ?? (await authorize.json() as { url: string }).url;
+    expect(authorizeLocation).toContain("/consent?");
+
+    const consentQuery = new URL(authorizeLocation, "http://local.test").search.slice(1);
+    const consent = await auth.handler(new Request("http://local.test/oauth2/consent", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ accept: true, oauth_query: consentQuery }),
+    }));
+    const consentLocation = consent.headers.get("location")
+      ?? (await consent.json() as { url: string }).url;
+    const callback = new URL(consentLocation);
+    expect(callback.searchParams.get("state")).toBe("state");
+
+    const token = await auth.handler(new Request("http://local.test/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: callback.searchParams.get("code")!,
+        redirect_uri: "http://127.0.0.1/callback",
+        client_id: clientBody.client_id,
+        code_verifier: verifier,
+      }),
+    }));
+    expect(token.status).toBe(200);
+    const tokenBody = await token.json() as { access_token: string; id_token: string };
+    expect(tokenBody.id_token).toBeTruthy();
+
+    const userinfo = await auth.handler(new Request("http://local.test/oauth2/userinfo", {
+      headers: { Authorization: `Bearer ${tokenBody.access_token}` },
+    }));
+    expect(await userinfo.json()).toMatchObject({
+      sub: "student",
+      name: "Student Name",
+      email: "student@smail.nju.edu.cn",
+      email_verified: false,
+    });
+
+    db.close();
+  });
+});

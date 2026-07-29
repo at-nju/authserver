@@ -237,24 +237,29 @@ function Console() {
     try {
       await action();
       if (success) setNotice(success);
+      return true;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "请求失败");
+      return false;
     }
   }
 
   function refresh() { setRevision((value) => value + 1); }
 
   async function saveName() {
-    await run(() => request("/update-user", { name }), "姓名已保存"); refresh();
+    if (await run(() => request("/update-user", { name }), "姓名已保存")) refresh();
   }
 
   async function changeEmail() {
     if (!emailSent) {
-      await run(() => request("/email-otp/request-email-change", { newEmail: email }), "验证码已发送");
-      setEmailSent(true); return;
+      if (await run(() => request("/email-otp/request-email-change", { newEmail: email }), "验证码已发送")) {
+        setEmailSent(true);
+      }
+      return;
     }
-    await run(() => request("/email-otp/change-email", { newEmail: email, otp }), "邮箱已更新");
-    setEmailSent(false); setOtp(""); refresh();
+    if (await run(() => request("/email-otp/change-email", { newEmail: email, otp }), "邮箱已更新")) {
+      setEmailSent(false); setOtp(""); refresh();
+    }
   }
 
   async function createClient(event: Event) {
@@ -266,7 +271,7 @@ function Console() {
         token_endpoint_auth_method: clientType === "public" ? "none" : "client_secret_basic",
         grant_types: ["authorization_code"],
         response_types: ["code"],
-        type: "web",
+        type: clientType === "public" ? "user-agent-based" : "web",
       });
       setSecret(client.client_secret ?? ""); setClientName(""); setRedirectUri("");
       await reloadClients();
