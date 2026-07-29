@@ -8,7 +8,6 @@
     "dev": "npm run build && wrangler dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:generate": "npx auth@1.6.25 generate --config auth.config.ts --output migrations/0001_auth.sql --yes",
     "db:migrate:local": "wrangler d1 migrations apply AUTH_DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply AUTH_DB --remote",
     "deploy": "npm run build && wrangler deploy"
