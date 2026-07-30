@@ -349,7 +349,9 @@ function Console() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
-  const [emailSent, setEmailSent] = useState(false);
+  const [emailVerificationOpen, setEmailVerificationOpen] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailVerificationError, setEmailVerificationError] = useState("");
   const [clientName, setClientName] = useState("");
   const [redirectUris, setRedirectUris] = useState("");
   const [clientType, setClientType] = useState<ClientKind>("public");
@@ -395,16 +397,40 @@ function Console() {
     if (await run(() => request("/update-user", { name }), "姓名已保存")) refresh();
   }
 
-  async function changeEmail() {
-    if (!emailSent) {
-      if (await run(() => request("/email-otp/request-email-change", { newEmail: email }), "验证码已发送")) {
-        setEmailSent(true);
-      }
-      return;
+  async function requestEmailChange() {
+    setError(""); setNotice(""); setEmailBusy(true);
+    try {
+      await request("/email-otp/request-email-change", { newEmail: email });
+      setOtp("");
+      setEmailVerificationError("");
+      setEmailVerificationOpen(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "请求失败");
+    } finally {
+      setEmailBusy(false);
     }
-    if (await run(() => request("/email-otp/change-email", { newEmail: email, otp }), "邮箱已更新")) {
-      setEmailSent(false); setOtp(""); refresh();
+  }
+
+  async function verifyEmailChange(event: Event) {
+    event.preventDefault();
+    setEmailVerificationError(""); setEmailBusy(true);
+    try {
+      await request("/email-otp/change-email", { newEmail: email, otp });
+      setEmailVerificationOpen(false);
+      setOtp("");
+      setNotice("邮箱已更新");
+      refresh();
+    } catch (reason) {
+      setEmailVerificationError(reason instanceof Error ? reason.message : "验证失败");
+    } finally {
+      setEmailBusy(false);
     }
+  }
+
+  function closeEmailVerification() {
+    setEmailVerificationOpen(false);
+    setOtp("");
+    setEmailVerificationError("");
   }
 
   function openCreateClient() {
@@ -565,19 +591,10 @@ function Console() {
               <input id="email_field" class="w-full" type="email" value={email}
                 onInput={(event) => setEmail(event.currentTarget.value)} />
               <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
-                onClick={changeEmail} disabled={emailSent}>修改邮箱</button>
+                onClick={requestEmailChange} disabled={emailBusy}>修改邮箱</button>
             </div>
-            {!emailSent && <small class="text-sm text-neutral-400">
-              {session.user.emailVerified ? "已验证" : "未验证"}</small>}
-            {emailSent && <div>
-              <label htmlFor="code_field" class="ml-1">验证码</label>
-              <div class="mt-1 flex items-center justify-between gap-2">
-                <input id="code_field" class="w-full" inputMode="numeric" value={otp}
-                  onInput={(event) => setOtp(event.currentTarget.value)} />
-                <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
-                  onClick={changeEmail}>确认邮箱</button>
-              </div>
-            </div>}
+            <small class="text-sm text-neutral-400">
+              {session.user.emailVerified ? "已验证" : "未验证"}</small>
           </div>
         </div>
       </section>
@@ -647,6 +664,30 @@ function Console() {
         </div>}
       </section>
     </div>
+
+    {emailVerificationOpen && <Modal title="验证邮箱" compact dismissDisabled={emailBusy}
+      onClose={closeEmailVerification}>
+      <p class="text-sm text-neutral-700">验证码已发送至</p>
+      <strong class="mt-1 block break-all text-neutral-950">{email}</strong>
+      <form class="mt-5" onSubmit={verifyEmailChange}>
+        <fieldset disabled={emailBusy}>
+          <label htmlFor="console_otp_field" class="mb-1 block text-sm">验证码</label>
+          <input id="console_otp_field" required autofocus class="w-full" inputMode="numeric"
+            autocomplete="one-time-code" maxLength={6} value={otp}
+            onInput={(event) => setOtp(event.currentTarget.value)} />
+          <ErrorText value={emailVerificationError} />
+          <div class="mt-5 flex justify-end gap-2">
+            <button type="button"
+              class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
+              onClick={closeEmailVerification}>取消</button>
+            <button type="submit"
+              class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
+              确认
+            </button>
+          </div>
+        </fieldset>
+      </form>
+    </Modal>}
 
     {clientDialog && <Modal title={clientDialog.mode === "create" ? "创建 OIDC 应用" : "编辑 OIDC 应用"}
       dismissDisabled={clientBusy} onClose={() => setClientDialog(null)}>
