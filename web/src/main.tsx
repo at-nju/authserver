@@ -20,6 +20,11 @@ type Client = {
   token_endpoint_auth_method?: string;
 };
 
+type ClientKind = "public" | "confidential";
+type ClientDialog = { mode: "create" } | { mode: "edit"; client: Client };
+type ClientConfirmation = { action: "rotate" | "delete"; client: Client };
+type ClientResult = { clientId: string; clientName: string; secret?: string };
+
 async function request<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
     credentials: "include",
@@ -59,6 +64,56 @@ function Layout({ title, children, wide = false }: {
 
 function ErrorText({ value }: { value: string }) {
   return value ? <p class="w-full rounded px-2 py-1 my-2 border border-red-300 bg-red-100 text-red-800">{value}</p> : null;
+}
+
+function CopyIcon({ copied = false }: { copied?: boolean }) {
+  return copied
+    ? <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none"
+      stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6" /></svg>
+    : <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none"
+      stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>;
+}
+
+function CloseIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none"
+    stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" /></svg>;
+}
+
+function Modal({ title, children, onClose, locked = false }: {
+  title: string;
+  children: ComponentChildren;
+  onClose: () => void;
+  locked?: boolean;
+}) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !locked) onClose();
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [locked, onClose]);
+
+  return <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+    onMouseDown={(event) => {
+      if (!locked && event.target === event.currentTarget) onClose();
+    }}>
+    <section role="dialog" aria-modal="true" aria-label={title}
+      class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-neutral-400 bg-white p-5 shadow-xl sm:p-6">
+      <header class="mb-5 flex items-start justify-between gap-4">
+        <h3 class="text-xl font-semibold text-neutral-950">{title}</h3>
+        {!locked && <button type="button" aria-label="关闭" title="关闭"
+          class="rounded-md border border-neutral-300 bg-white p-1.5 text-neutral-900 hover:bg-neutral-100"
+          onClick={onClose}><CloseIcon /></button>}
+      </header>
+      {children}
+    </section>
+  </div>;
 }
 
 function useSession(login: string, revision = 0) {
@@ -237,14 +292,26 @@ function Console() {
   const [otp, setOtp] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const [clientName, setClientName] = useState("");
-  const [redirectUri, setRedirectUri] = useState("");
-  const [clientType, setClientType] = useState("public");
-  const [secret, setSecret] = useState("");
+  const [redirectUris, setRedirectUris] = useState("");
+  const [clientType, setClientType] = useState<ClientKind>("public");
+  const [clientDialog, setClientDialog] = useState<ClientDialog | null>(null);
+  const [clientConfirmation, setClientConfirmation] = useState<ClientConfirmation | null>(null);
+  const [clientResult, setClientResult] = useState<ClientResult | null>(null);
+  const [clientDialogError, setClientDialogError] = useState("");
+  const [clientBusy, setClientBusy] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [secretSaved, setSecretSaved] = useState(false);
+  const [copiedField, setCopiedField] = useState<"client-id" | "secret" | "">("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
-  const reloadClients = () => request<Client[]>("/oauth2/get-clients")
-    .then(setClients).catch((reason) => setError(reason instanceof Error ? reason.message : "请求失败"));
+  const reloadClients = async () => {
+    try {
+      setClients(await request<Client[]>("/oauth2/get-clients"));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "请求失败");
+    }
+  };
 
   useEffect(() => {
     if (!session) return;
@@ -281,49 +348,131 @@ function Console() {
     }
   }
 
-  async function createClient(event: Event) {
+  function openCreateClient() {
+    setClientName("");
+    setRedirectUris("");
+    setClientType("public");
+    setClientDialogError("");
+    setClientDialog({ mode: "create" });
+  }
+
+  function openEditClient(client: Client) {
+    setClientName(client.client_name ?? "");
+    setRedirectUris(client.redirect_uris?.join("\n") ?? "");
+    setClientType(client.token_endpoint_auth_method === "none" ? "public" : "confidential");
+    setClientDialogError("");
+    setClientDialog({ mode: "edit", client });
+  }
+
+  function parsedRedirectUris() {
+    const values = [...new Set(redirectUris.split("\n").map((value) => value.trim()).filter(Boolean))];
+    if (!values.length) throw new Error("请至少填写一个回调地址");
+    for (const value of values) {
+      try {
+        const url = new URL(value);
+        if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error();
+      } catch {
+        throw new Error(`回调地址格式不正确：${value}`);
+      }
+    }
+    return values;
+  }
+
+  async function saveClient(event: Event) {
     event.preventDefault();
-    await run(async () => {
-      const client = await request<Client>("/oauth2/create-client", {
-        client_name: clientName,
-        redirect_uris: [redirectUri],
-        token_endpoint_auth_method: clientType === "public" ? "none" : "client_secret_basic",
-        grant_types: ["authorization_code"],
-        response_types: ["code"],
-        type: clientType === "public" ? "user-agent-based" : "web",
+    if (!clientDialog) return;
+    setClientDialogError("");
+    if (!clientName.trim()) {
+      setClientDialogError("请填写应用名称");
+      return;
+    }
+    let uris: string[];
+    try {
+      uris = parsedRedirectUris();
+    } catch (reason) {
+      setClientDialogError(reason instanceof Error ? reason.message : "回调地址格式不正确");
+      return;
+    }
+    setClientBusy(true);
+    try {
+      if (clientDialog.mode === "edit") {
+        await request("/oauth2/update-client", {
+          client_id: clientDialog.client.client_id,
+          update: { client_name: clientName.trim(), redirect_uris: uris },
+        });
+        setClientDialog(null);
+      } else {
+        const client = await request<Client>("/oauth2/create-client", {
+          client_name: clientName.trim(),
+          redirect_uris: uris,
+          token_endpoint_auth_method: clientType === "public" ? "none" : "client_secret_basic",
+          grant_types: ["authorization_code"],
+          response_types: ["code"],
+          type: clientType === "public" ? "user-agent-based" : "web",
+        });
+        setClientDialog(null);
+        setSecretSaved(false);
+        setCopiedField("");
+        setClientResult({
+          clientId: client.client_id,
+          clientName: client.client_name ?? clientName.trim(),
+          ...(client.client_secret ? { secret: client.client_secret } : {}),
+        });
+      }
+      await reloadClients();
+    } catch (reason) {
+      setClientDialogError(reason instanceof Error ? reason.message : "请求失败");
+    } finally {
+      setClientBusy(false);
+    }
+  }
+
+  async function rotateClient() {
+    if (!clientConfirmation || clientConfirmation.action !== "rotate") return;
+    setClientBusy(true); setClientDialogError("");
+    try {
+      const source = clientConfirmation.client;
+      const client = await request<Client>("/oauth2/client/rotate-secret", { client_id: source.client_id });
+      setClientConfirmation(null);
+      setSecretSaved(false);
+      setCopiedField("");
+      setClientResult({
+        clientId: source.client_id,
+        clientName: source.client_name ?? source.client_id,
+        ...(client.client_secret ? { secret: client.client_secret } : {}),
       });
-      setSecret(client.client_secret ?? ""); setClientName(""); setRedirectUri("");
       await reloadClients();
-    }, "应用已创建");
+    } catch (reason) {
+      setClientDialogError(reason instanceof Error ? reason.message : "请求失败");
+    } finally {
+      setClientBusy(false);
+    }
   }
 
-  async function editClient(client: Client) {
-    const nextName = prompt("名称", client.client_name ?? "");
-    if (nextName === null) return;
-    const nextUri = prompt("Redirect URI", client.redirect_uris?.[0] ?? "");
-    if (!nextUri) return;
-    await run(async () => {
-      await request("/oauth2/update-client", {
-        client_id: client.client_id,
-        update: { client_name: nextName, redirect_uris: [nextUri] },
-      });
+  async function removeClient() {
+    if (!clientConfirmation || clientConfirmation.action !== "delete") return;
+    setClientBusy(true); setClientDialogError("");
+    try {
+      await request("/oauth2/delete-client", { client_id: clientConfirmation.client.client_id });
+      setClientConfirmation(null);
+      setDeleteConfirmation("");
       await reloadClients();
-    }, "应用已保存");
+    } catch (reason) {
+      setClientDialogError(reason instanceof Error ? reason.message : "请求失败");
+    } finally {
+      setClientBusy(false);
+    }
   }
 
-  async function rotate(clientId: string) {
-    await run(async () => {
-      const client = await request<Client>("/oauth2/client/rotate-secret", { client_id: clientId });
-      setSecret(client.client_secret ?? ""); await reloadClients();
-    });
-  }
-
-  async function remove(clientId: string) {
-    if (!confirm("删除这个应用？")) return;
-    await run(async () => {
-      await request("/oauth2/delete-client", { client_id: clientId });
-      await reloadClients();
-    }, "应用已删除");
+  async function copyResult(value: string, field: "client-id" | "secret") {
+    try {
+      setClientDialogError("");
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+      window.setTimeout(() => setCopiedField((current) => current === field ? "" : current), 1600);
+    } catch {
+      setClientDialogError("复制失败，请手动选择并复制");
+    }
   }
 
   async function logout() {
@@ -372,30 +521,209 @@ function Console() {
           </div>
         </div>
       </section>
-      <section><h2 class="mt-2 mb-4 font-semibold text-2xl">OIDC 应用</h2>
-        <form onSubmit={createClient}>
-          <label>客户端名称<input required value={clientName}
-            onInput={(event) => setClientName(event.currentTarget.value)} /></label>
-          <label>客户端类型<select value={clientType}
-            onChange={(event) => setClientType(event.currentTarget.value)}>
-            <option value="public">公开客户端</option><option value="confidential">机密客户端</option>
-          </select></label>
-          <label>回调地址<input required type="url" value={redirectUri}
-            onInput={(event) => setRedirectUri(event.currentTarget.value)} /></label>
-          <button>创建</button>
-        </form>
-        {secret && <div><strong>客户端密码（仅显示一次）</strong>
-          <code>{secret}</code><button onClick={() => setSecret("")}>关闭</button></div>}
-        {clients.length ? clients.map((client) => <article key={client.client_id}>
-          <div><strong>{client.client_name ?? client.client_id}</strong><code>{client.client_id}</code>
-            <small>{client.redirect_uris?.join(", ")}</small></div>
-          <div><button onClick={() => editClient(client)}>编辑</button>
-            {client.token_endpoint_auth_method !== "none" &&
-              <button onClick={() => rotate(client.client_id)}>轮换密钥</button>}
-            <button onClick={() => remove(client.client_id)}>删除</button></div>
-        </article>) : <p>暂无应用。</p>}
+      <section class="mt-8 border-t border-neutral-300 pt-7">
+        <header class="mb-5 flex items-center justify-between gap-4">
+          <div>
+            <h2 class="font-semibold text-2xl text-neutral-950">OIDC 应用</h2>
+            <p class="mt-1 text-sm text-neutral-700">管理能够使用此账户系统登录的应用。</p>
+          </div>
+          <button type="button"
+            class="shrink-0 rounded-md border border-neutral-900 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+            onClick={openCreateClient}>创建应用</button>
+        </header>
+
+        {clients.length ? <div class="space-y-4">
+          {clients.map((client) => {
+            const confidential = client.token_endpoint_auth_method !== "none";
+            return <article key={client.client_id}
+              class="rounded-xl border border-neutral-300 bg-white p-4 shadow-sm sm:p-5">
+              <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="text-lg font-semibold text-neutral-950">
+                      {client.client_name ?? client.client_id}
+                    </h3>
+                    <span class="rounded-full border border-neutral-300 bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-800">
+                      {confidential ? "机密客户端" : "公开客户端"}
+                    </span>
+                  </div>
+                  <dl class="mt-4 space-y-4">
+                    <div>
+                      <dt class="text-xs font-medium text-neutral-600">客户端 ID</dt>
+                      <dd class="mt-1 break-all font-mono text-sm text-neutral-950">{client.client_id}</dd>
+                    </div>
+                    <div>
+                      <dt class="text-xs font-medium text-neutral-600">回调地址</dt>
+                      <dd class="mt-1 space-y-1">
+                        {client.redirect_uris?.map((uri) => <code key={uri}
+                          class="block break-all whitespace-normal text-sm text-neutral-950">{uri}</code>)}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                  <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
+                    onClick={() => openEditClient(client)}>编辑</button>
+                  {confidential && <button type="button"
+                    class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
+                    onClick={() => {
+                      setClientDialogError("");
+                      setClientConfirmation({ action: "rotate", client });
+                    }}>轮换密钥</button>}
+                  <button type="button"
+                    class="rounded-md border border-red-700 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50"
+                    onClick={() => {
+                      setDeleteConfirmation("");
+                      setClientDialogError("");
+                      setClientConfirmation({ action: "delete", client });
+                    }}>删除</button>
+                </div>
+              </div>
+            </article>;
+          })}
+        </div> : <div class="rounded-xl border border-dashed border-neutral-400 px-5 py-10 text-center">
+          <h3 class="font-semibold text-neutral-950">还没有 OIDC 应用</h3>
+          <p class="mt-1 text-sm text-neutral-700">创建一个应用以接入 OIDC 登录。</p>
+          <button type="button"
+            class="mt-4 rounded-md border border-neutral-900 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+            onClick={openCreateClient}>创建第一个应用</button>
+        </div>}
       </section>
     </div>
+
+    {clientDialog && <Modal title={clientDialog.mode === "create" ? "创建 OIDC 应用" : "编辑 OIDC 应用"}
+      onClose={() => !clientBusy && setClientDialog(null)}>
+      <form onSubmit={saveClient}>
+        <fieldset disabled={clientBusy} class="space-y-5">
+          <div>
+            <label htmlFor="client_name_field" class="mb-1.5 block text-sm font-medium text-neutral-950">应用名称</label>
+            <input id="client_name_field" required autofocus class="w-full" value={clientName}
+              onInput={(event) => setClientName(event.currentTarget.value)} />
+          </div>
+
+          <div>
+            <span class="mb-1.5 block text-sm font-medium text-neutral-950">客户端类型</span>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button type="button" disabled={clientDialog.mode === "edit"}
+                aria-pressed={clientType === "public"}
+                class={`rounded-lg border p-3 text-left ${clientType === "public"
+                  ? "border-neutral-950 bg-neutral-100" : "border-neutral-300 bg-white hover:bg-neutral-50"}`}
+                onClick={() => setClientType("public")}>
+                <strong class="block text-sm text-neutral-950">公开客户端</strong>
+                <span class="mt-1 block text-xs leading-5 text-neutral-700">适用于浏览器、移动端和桌面端，无法安全保存密钥。</span>
+              </button>
+              <button type="button" disabled={clientDialog.mode === "edit"}
+                aria-pressed={clientType === "confidential"}
+                class={`rounded-lg border p-3 text-left ${clientType === "confidential"
+                  ? "border-neutral-950 bg-neutral-100" : "border-neutral-300 bg-white hover:bg-neutral-50"}`}
+                onClick={() => setClientType("confidential")}>
+                <strong class="block text-sm text-neutral-950">机密客户端</strong>
+                <span class="mt-1 block text-xs leading-5 text-neutral-700">适用于有可信后端的服务，将生成客户端密钥。</span>
+              </button>
+            </div>
+            {clientDialog.mode === "edit" && <p class="mt-1.5 text-xs text-neutral-700">创建后不能修改客户端类型。</p>}
+          </div>
+
+          <div>
+            <label htmlFor="redirect_uris_field" class="mb-1.5 block text-sm font-medium text-neutral-950">回调地址</label>
+            <textarea id="redirect_uris_field" required rows={6}
+              class="w-full resize-y rounded-md border border-neutral-400 px-2 py-1.5 font-mono text-sm text-neutral-950"
+              placeholder={'https://example.com/callback\nhttp://localhost:3000/callback'} value={redirectUris}
+              onInput={(event) => setRedirectUris(event.currentTarget.value)} />
+            <p class="mt-1.5 text-xs text-neutral-700">每行填写一个完整的 HTTP 或 HTTPS 地址。</p>
+          </div>
+          <ErrorText value={clientDialogError} />
+          <div class="flex justify-end gap-2 border-t border-neutral-200 pt-4">
+            <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
+              onClick={() => setClientDialog(null)}>取消</button>
+            <button type="submit"
+              class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
+              {clientDialog.mode === "create" ? "创建" : "保存"}
+            </button>
+          </div>
+        </fieldset>
+      </form>
+    </Modal>}
+
+    {clientConfirmation?.action === "rotate" && <Modal title="轮换客户端密钥"
+      onClose={() => !clientBusy && setClientConfirmation(null)}>
+      <p class="text-neutral-900">确定要为 <strong>{clientConfirmation.client.client_name ?? clientConfirmation.client.client_id}</strong> 轮换密钥吗？</p>
+      <p class="mt-3 rounded-md border border-neutral-300 bg-neutral-100 p-3 text-sm text-neutral-900">
+        旧密钥将立即失效。仍在使用旧密钥的服务会中断，直到完成配置更新。
+      </p>
+      <ErrorText value={clientDialogError} />
+      <fieldset disabled={clientBusy} class="mt-5 flex justify-end gap-2 border-t border-neutral-200 pt-4">
+        <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
+          onClick={() => setClientConfirmation(null)}>取消</button>
+        <button type="button" class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+          onClick={rotateClient}>轮换密钥</button>
+      </fieldset>
+    </Modal>}
+
+    {clientConfirmation?.action === "delete" && <Modal title="删除 OIDC 应用"
+      onClose={() => !clientBusy && setClientConfirmation(null)}>
+      <p class="text-neutral-900">删除后，使用此客户端的登录流程将立即停止，且无法恢复。</p>
+      <div class="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-neutral-950">
+        <strong class="block">{clientConfirmation.client.client_name ?? clientConfirmation.client.client_id}</strong>
+        <code class="mt-1 block break-all">{clientConfirmation.client.client_id}</code>
+      </div>
+      <label htmlFor="delete_confirmation_field" class="mb-1.5 mt-4 block text-sm font-medium text-neutral-950">
+        输入“{clientConfirmation.client.client_name ?? clientConfirmation.client.client_id}”以确认删除
+      </label>
+      <input id="delete_confirmation_field" autofocus class="w-full" value={deleteConfirmation}
+        disabled={clientBusy} onInput={(event) => setDeleteConfirmation(event.currentTarget.value)} />
+      <ErrorText value={clientDialogError} />
+      <fieldset disabled={clientBusy} class="mt-5 flex justify-end gap-2 border-t border-neutral-200 pt-4">
+        <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
+          onClick={() => setClientConfirmation(null)}>取消</button>
+        <button type="button" disabled={deleteConfirmation !== (clientConfirmation.client.client_name ?? clientConfirmation.client.client_id)}
+          class="rounded-md border border-red-800 bg-white px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-50"
+          onClick={removeClient}>删除应用</button>
+      </fieldset>
+    </Modal>}
+
+    {clientResult && <Modal title={clientResult.secret ? "保存客户端凭据" : "应用创建成功"}
+      locked={Boolean(clientResult.secret)} onClose={() => setClientResult(null)}>
+      <p class="text-neutral-900"><strong>{clientResult.clientName}</strong> 的客户端凭据如下。</p>
+      {clientResult.secret && <p class="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-neutral-950">
+        客户端密钥仅显示这一次。关闭前请将它保存到安全的位置。
+      </p>}
+      <dl class="mt-5 space-y-4">
+        <div>
+          <dt class="mb-1 text-sm font-medium text-neutral-700">客户端 ID</dt>
+          <dd class="flex items-start gap-2 rounded-md border border-neutral-300 bg-neutral-100 p-3">
+            <code class="min-w-0 flex-1 break-all text-sm text-neutral-950">{clientResult.clientId}</code>
+            <button type="button" aria-label="复制客户端 ID" title="复制客户端 ID"
+              class="shrink-0 rounded border border-neutral-400 bg-white p-1.5 text-neutral-950 hover:bg-neutral-200"
+              onClick={() => copyResult(clientResult.clientId, "client-id")}>
+              <CopyIcon copied={copiedField === "client-id"} />
+            </button>
+          </dd>
+        </div>
+        {clientResult.secret && <div>
+          <dt class="mb-1 text-sm font-medium text-neutral-700">客户端密钥</dt>
+          <dd class="flex items-start gap-2 rounded-md border border-neutral-300 bg-neutral-100 p-3">
+            <code class="min-w-0 flex-1 break-all text-sm text-neutral-950">{clientResult.secret}</code>
+            <button type="button" aria-label="复制客户端密钥" title="复制客户端密钥"
+              class="shrink-0 rounded border border-neutral-400 bg-white p-1.5 text-neutral-950 hover:bg-neutral-200"
+              onClick={() => copyResult(clientResult.secret!, "secret")}>
+              <CopyIcon copied={copiedField === "secret"} />
+            </button>
+          </dd>
+        </div>}
+      </dl>
+      <ErrorText value={clientDialogError} />
+      {clientResult.secret && <label class="mt-5 flex cursor-pointer items-start gap-2 text-sm text-neutral-950">
+        <input type="checkbox" class="mt-0.5 h-4 w-4 p-0" checked={secretSaved}
+          onChange={(event) => setSecretSaved(event.currentTarget.checked)} />
+        <span>我已将客户端密钥保存到安全的位置</span>
+      </label>}
+      <div class="mt-5 flex justify-end border-t border-neutral-200 pt-4">
+        <button type="button" disabled={Boolean(clientResult.secret && !secretSaved)}
+          class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+          onClick={() => setClientResult(null)}>关闭</button>
+      </div>
+    </Modal>}
   </Layout>;
 }
 
