@@ -57,7 +57,7 @@ function Layout({ title, children, wide = false }: {
 }) {
   return <main class={`mx-auto px-4 ${wide ? "mt-[6vh] max-w-4xl" : "mt-[20vh] max-w-lg"}`}>
     <header class="ml-2 mb-1 font-semibold text-neutral-500">{__APP_NAME__}</header>
-    <section class="rounded-xl border border-neutral-300 bg-white p-6">
+    <section class="rounded-xl border border-neutral-300 bg-white p-6 shadow">
       <h1 class="mb-4 text-xl font-bold">{title}</h1>
       {children}
     </section>
@@ -71,7 +71,7 @@ function Layout({ title, children, wide = false }: {
 }
 
 function ErrorText({ value }: { value: string }) {
-  return value ? <p class="w-full rounded px-2 py-1 my-2 border border-red-300 bg-red-100 text-red-800">{value}</p> : null;
+  return value ? <p class="w-full rounded px-3 py-2 my-2 border border-red-300 bg-red-100 text-red-800">{value}</p> : null;
 }
 
 function CopyIcon({ copied = false }: { copied?: boolean }) {
@@ -113,12 +113,11 @@ function Modal({ title, children, onClose, locked = false, dismissDisabled = fal
       if (!locked && !dismissDisabled && event.target === event.currentTarget) onClose();
     }}>
     <section role="dialog" aria-modal="true" aria-label={title}
-      class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-neutral-400 bg-white p-5 shadow-xl sm:p-6">
+      class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-neutral-400 bg-white p-5 shadow-xl">
       <header class="mb-5 flex items-start justify-between gap-4">
         <h3 class="text-xl font-semibold text-neutral-950">{title}</h3>
         {!locked && <button type="button" aria-label="关闭" title="关闭"
-          class="rounded-md border border-neutral-300 bg-white p-1.5 text-neutral-900 hover:bg-neutral-100"
-          disabled={dismissDisabled}
+          class="p-2" disabled={dismissDisabled}
           onClick={onClose}><CloseIcon /></button>}
       </header>
       {children}
@@ -164,16 +163,16 @@ function Login() {
   }
 
   return <Layout title="登录"><form onSubmit={submit}>
-    <label htmlFor="token_field">Token</label>
+    <label class="text-sm" htmlFor="token_field">Token</label>
     <div class="flex items-center justify-between gap-2">
       <input id="token_field" class="w-full rounded-md border border-neutral-400 p-1"
         required type="password" autocomplete="off" autofocus value={token}
         onInput={(event) => setToken(event.currentTarget.value)} />
-      <button class="shrink-0 px-2 py-1 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200"
+      <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
         disabled={busy}>登录</button>
     </div>
     <ErrorText value={error} />
-    <p class="mt-4 text-neutral-500">
+    <p class="mt-2 text-neutral-500 text-sm">
       还没有 Token？
       <a href="https://table.nju.edu.cn/apps/custom/authserver/"
         target="_blank" rel="noopener noreferrer">点击此处获取</a>
@@ -232,7 +231,7 @@ function Onboarding() {
 
   if (!session) return <Layout title="首次设置"><p>加载中</p></Layout>;
   return <Layout title="首次设置">
-    <p>可以使用默认资料，也可以现在修改。</p>
+    <p>可以使用默认资料，也可以现在修改</p>
     <label>姓名<input value={name} onInput={(event) => setName(event.currentTarget.value)} /></label>
     <label>邮箱<input type="email" value={email}
       onInput={(event) => setEmail(event.currentTarget.value)} /></label>
@@ -496,49 +495,47 @@ function Console() {
       <span class="text-neutral-400">ID {session.user.id}</span>
       <button class="text-blue-500 hover:text-blue-700" onClick={logout}>退出</button>
     </div>
-    {notice && <p>{notice}</p>}<ErrorText value={error} />
+    {notice && <p class="w-full rounded px-3 py-2 my-2 border border-neutral-300 bg-neutral-100">{notice}</p>}
+    <ErrorText value={error} />
     <div>
       <section><h2 class="mt-2 mb-4 font-semibold text-2xl">个人资料</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="name_field" class="ml-1">昵称</label>
+            <label htmlFor="name_field" class="text-sm">昵称</label>
             <div class="mt-1 flex items-center justify-between gap-2">
               <input id="name_field" class="w-full" value={name}
                 onInput={(event) => setName(event.currentTarget.value)} />
-              <button class="shrink-0 px-2 py-1 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200"
+              <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
                 onClick={saveName}>保存昵称</button>
             </div>
           </div>
           <div>
-            <label htmlFor="email_field" class="ml-1">邮箱</label>
+            <label htmlFor="email_field" class="text-sm">邮箱</label>
             <div class="mt-1 flex items-center justify-between gap-2">
               <input id="email_field" class="w-full" type="email" value={email}
                 onInput={(event) => setEmail(event.currentTarget.value)} />
-              <button class="shrink-0 px-2 py-1 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200"
+              <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
                 onClick={changeEmail} disabled={emailSent}>修改邮箱</button>
             </div>
-            {!emailSent && <small class="text-sm text-neutral-400 ml-1">
+            {!emailSent && <small class="text-sm text-neutral-400">
               {session.user.emailVerified ? "已验证" : "未验证"}</small>}
             {emailSent && <div>
               <label htmlFor="code_field" class="ml-1">验证码</label>
               <div class="mt-1 flex items-center justify-between gap-2">
                 <input id="code_field" class="w-full" inputMode="numeric" value={otp}
                   onInput={(event) => setOtp(event.currentTarget.value)} />
-                <button class="shrink-0 px-2 py-1 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200"
+                <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
                   onClick={changeEmail}>确认邮箱</button>
               </div>
             </div>}
           </div>
         </div>
       </section>
-      <section class="mt-8 border-t border-neutral-300 pt-7">
+      <section class="mt-6">
         <header class="mb-5 flex items-center justify-between gap-4">
-          <div>
-            <h2 class="font-semibold text-2xl text-neutral-950">OIDC 应用</h2>
-            <p class="mt-1 text-sm text-neutral-700">管理能够使用此账户系统登录的应用。</p>
-          </div>
+          <h2 class="font-semibold text-2xl text-neutral-950">OIDC 应用</h2>
           <button type="button"
-            class="shrink-0 rounded-md border border-neutral-900 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+            class="shrink-0 rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm hover:bg-neutral-200"
             onClick={openCreateClient}>创建应用</button>
         </header>
 
@@ -546,8 +543,8 @@ function Console() {
           {clients.map((client) => {
             const confidential = isConfidentialClient(client);
             return <article key={client.client_id}
-              class="rounded-xl border border-neutral-300 bg-white p-4 shadow-sm sm:p-5">
-              <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              class="rounded-xl border border-neutral-300 bg-white p-4 shadow-sm">
+              <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
                     <h3 class="text-lg font-semibold text-neutral-950">
@@ -572,16 +569,16 @@ function Console() {
                   </dl>
                 </div>
                 <div class="flex shrink-0 flex-wrap gap-2">
-                  <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
+                  <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
                     onClick={() => openEditClient(client)}>编辑</button>
                   {confidential && <button type="button"
-                    class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
+                    class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
                     onClick={() => {
                       setClientDialogError("");
                       setClientConfirmation({ action: "rotate", client });
                     }}>轮换密钥</button>}
                   <button type="button"
-                    class="rounded-md border border-red-700 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50"
+                    class="rounded-md border border-red-700 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
                     onClick={() => {
                       setDeleteConfirmation("");
                       setClientDialogError("");
@@ -593,7 +590,7 @@ function Console() {
           })}
         </div> : <div class="rounded-xl border border-dashed border-neutral-400 px-5 py-10 text-center">
           <h3 class="font-semibold text-neutral-950">还没有 OIDC 应用</h3>
-          <p class="mt-1 text-sm text-neutral-700">创建一个应用以接入 OIDC 登录。</p>
+          <p class="mt-1 text-sm text-neutral-700">创建一个应用以接入 OIDC 登录</p>
           <button type="button"
             class="mt-4 rounded-md border border-neutral-900 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
             onClick={openCreateClient}>创建第一个应用</button>
@@ -606,13 +603,13 @@ function Console() {
       <form onSubmit={saveClient}>
         <fieldset disabled={clientBusy} class="space-y-5">
           <div>
-            <label htmlFor="client_name_field" class="mb-1.5 block text-sm font-medium text-neutral-950">应用名称</label>
+            <label htmlFor="client_name_field" class="mb-1.5 block text-sm">应用名称</label>
             <input id="client_name_field" required autofocus class="w-full" value={clientName}
               onInput={(event) => setClientName(event.currentTarget.value)} />
           </div>
 
           <div>
-            <span class="mb-1.5 block text-sm font-medium text-neutral-950">客户端类型</span>
+            <span class="mb-1.5 block text-sm">客户端类型</span>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <button type="button" disabled={clientDialog.mode === "edit"}
                 aria-pressed={clientType === "public"}
@@ -620,7 +617,7 @@ function Console() {
                   ? "border-neutral-950 bg-neutral-100" : "border-neutral-300 bg-white hover:bg-neutral-50"}`}
                 onClick={() => setClientType("public")}>
                 <strong class="block text-sm text-neutral-950">公开客户端</strong>
-                <span class="mt-1 block text-xs leading-5 text-neutral-700">适用于浏览器、移动端和桌面端，无法安全保存密钥。</span>
+                <span class="mt-1 block text-xs leading-5 text-neutral-700">适用于浏览器和 App，无法保存密钥</span>
               </button>
               <button type="button" disabled={clientDialog.mode === "edit"}
                 aria-pressed={clientType === "confidential"}
@@ -628,26 +625,26 @@ function Console() {
                   ? "border-neutral-950 bg-neutral-100" : "border-neutral-300 bg-white hover:bg-neutral-50"}`}
                 onClick={() => setClientType("confidential")}>
                 <strong class="block text-sm text-neutral-950">机密客户端</strong>
-                <span class="mt-1 block text-xs leading-5 text-neutral-700">适用于有可信后端的服务，将生成客户端密钥。</span>
+                <span class="mt-1 block text-xs leading-5 text-neutral-700">适用于有可信后端的服务，将生成客户端密钥</span>
               </button>
             </div>
-            {clientDialog.mode === "edit" && <p class="mt-1.5 text-xs text-neutral-700">创建后不能修改客户端类型。</p>}
+            {clientDialog.mode === "edit" && <p class="mt-1.5 text-xs text-neutral-700">创建后不能修改客户端类型</p>}
           </div>
 
           <div>
-            <label htmlFor="redirect_uris_field" class="mb-1.5 block text-sm font-medium text-neutral-950">回调地址</label>
+            <label htmlFor="redirect_uris_field" class="mb-1.5 block text-sm">回调地址</label>
             <textarea id="redirect_uris_field" required rows={6}
               class="w-full resize-y rounded-md border border-neutral-400 px-2 py-1.5 font-mono text-sm text-neutral-950"
               placeholder={'https://example.com/callback\nhttp://localhost:3000/callback'} value={redirectUris}
               onInput={(event) => setRedirectUris(event.currentTarget.value)} />
-            <p class="mt-1.5 text-xs text-neutral-700">每行填写一个完整的 HTTP 或 HTTPS 地址。</p>
+            <p class="mt-1.5 text-xs text-neutral-700">每行填写一个完整的 HTTP 或 HTTPS 地址</p>
           </div>
           <ErrorText value={clientDialogError} />
-          <div class="flex justify-end gap-2 border-t border-neutral-200 pt-4">
-            <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
+          <div class="flex justify-end gap-2">
+            <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
               onClick={() => setClientDialog(null)}>取消</button>
             <button type="submit"
-              class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
+              class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
               {clientDialog.mode === "create" ? "创建" : "保存"}
             </button>
           </div>
@@ -659,20 +656,20 @@ function Console() {
       dismissDisabled={clientBusy} onClose={() => setClientConfirmation(null)}>
       <p class="text-neutral-900">确定要为 <strong>{clientNameOrId(clientConfirmation.client)}</strong> 轮换密钥吗？</p>
       <p class="mt-3 rounded-md border border-neutral-300 bg-neutral-100 p-3 text-sm text-neutral-900">
-        旧密钥将立即失效。仍在使用旧密钥的服务会中断，直到完成配置更新。
+        旧密钥将立即失效。仍在使用旧密钥的服务会中断，直到完成配置更新
       </p>
       <ErrorText value={clientDialogError} />
-      <fieldset disabled={clientBusy} class="mt-5 flex justify-end gap-2 border-t border-neutral-200 pt-4">
-        <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
+      <fieldset disabled={clientBusy} class="mt-5 flex justify-end gap-2">
+        <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
           onClick={() => setClientConfirmation(null)}>取消</button>
-        <button type="button" class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+        <button type="button" class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
           onClick={rotateClient}>轮换密钥</button>
       </fieldset>
     </Modal>}
 
     {clientConfirmation?.action === "delete" && <Modal title="删除 OIDC 应用"
       dismissDisabled={clientBusy} onClose={() => setClientConfirmation(null)}>
-      <p class="text-neutral-900">删除后，使用此客户端的登录流程将立即停止，且无法恢复。</p>
+      <p class="text-neutral-900">删除后，使用此客户端的登录流程将立即停止，且无法恢复</p>
       <div class="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-neutral-950">
         <strong class="block">{clientNameOrId(clientConfirmation.client)}</strong>
         <code class="mt-1 block break-all">{clientConfirmation.client.client_id}</code>
@@ -684,38 +681,38 @@ function Console() {
         disabled={clientBusy} onInput={(event) => setDeleteConfirmation(event.currentTarget.value)} />
       <ErrorText value={clientDialogError} />
       <fieldset disabled={clientBusy} class="mt-5 flex justify-end gap-2 border-t border-neutral-200 pt-4">
-        <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
+        <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
           onClick={() => setClientConfirmation(null)}>取消</button>
         <button type="button" disabled={deleteConfirmation !== clientNameOrId(clientConfirmation.client)}
-          class="rounded-md border border-red-800 bg-white px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-50"
+          class="rounded-md border border-red-800 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50"
           onClick={removeClient}>删除应用</button>
       </fieldset>
     </Modal>}
 
     {clientResult && <Modal title={clientResult.secret ? "保存客户端凭据" : "应用创建成功"}
       locked={Boolean(clientResult.secret)} onClose={() => setClientResult(null)}>
-      <p class="text-neutral-900"><strong>{clientResult.clientName}</strong> 的客户端凭据如下。</p>
+      <p class="text-neutral-900"><strong>{clientResult.clientName}</strong> 的客户端凭据如下</p>
       {clientResult.secret && <p class="mt-3 rounded-md border border-neutral-300 bg-neutral-100 p-3 text-sm text-neutral-950">
-        客户端密钥仅显示这一次。关闭前请将它保存到安全的位置。
+        客户端密钥仅显示这一次，关闭前请将它保存到安全的位置
       </p>}
       <dl class="mt-5 space-y-4">
         <div>
-          <dt class="mb-1 text-sm font-medium text-neutral-700">客户端 ID</dt>
-          <dd class="flex items-start gap-2 rounded-md border border-neutral-300 bg-neutral-100 p-3">
+          <dt class="mb-1 text-sm">客户端 ID</dt>
+          <dd class="flex items-center gap-2 rounded-md border border-neutral-300 bg-neutral-100 p-3">
             <code class="min-w-0 flex-1 break-all text-sm text-neutral-950">{clientResult.clientId}</code>
             <button type="button" aria-label="复制客户端 ID" title="复制客户端 ID"
-              class="shrink-0 rounded border border-neutral-400 bg-white p-1.5 text-neutral-950 hover:bg-neutral-200"
+              class="shrink-0 rounded p-1.5 text-neutral-950 hover:bg-neutral-300"
               onClick={() => copyResult(clientResult.clientId, "client-id")}>
               <CopyIcon copied={copiedField === "client-id"} />
             </button>
           </dd>
         </div>
         {clientResult.secret && <div>
-          <dt class="mb-1 text-sm font-medium text-neutral-700">客户端密钥</dt>
-          <dd class="flex items-start gap-2 rounded-md border border-neutral-300 bg-neutral-100 p-3">
+          <dt class="mb-1 text-sm">客户端密钥</dt>
+          <dd class="flex items-center gap-2 rounded-md border border-neutral-300 bg-neutral-100 p-3">
             <code class="min-w-0 flex-1 break-all text-sm text-neutral-950">{clientResult.secret}</code>
             <button type="button" aria-label="复制客户端密钥" title="复制客户端密钥"
-              class="shrink-0 rounded border border-neutral-400 bg-white p-1.5 text-neutral-950 hover:bg-neutral-200"
+              class="shrink-0 rounded p-1.5 text-neutral-950 hover:bg-neutral-300"
               onClick={() => copyResult(clientResult.secret!, "secret")}>
               <CopyIcon copied={copiedField === "secret"} />
             </button>
@@ -723,14 +720,14 @@ function Console() {
         </div>}
       </dl>
       <ErrorText value={clientDialogError} />
-      {clientResult.secret && <label class="mt-5 flex cursor-pointer items-start gap-2 text-sm text-neutral-950">
+      {clientResult.secret && <label class="mt-5 flex cursor-pointer items-center gap-2 text-sm text-neutral-950">
         <input type="checkbox" class="mt-0.5 h-4 w-4 p-0" checked={secretSaved}
           onChange={(event) => setSecretSaved(event.currentTarget.checked)} />
         <span>我已将客户端密钥保存到安全的位置</span>
       </label>}
-      <div class="mt-5 flex justify-end border-t border-neutral-200 pt-4">
+      <div class="mt-5 flex justify-end pt-2">
         <button type="button" disabled={Boolean(clientResult.secret && !secretSaved)}
-          class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+          class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
           onClick={() => setClientResult(null)}>关闭</button>
       </div>
     </Modal>}
