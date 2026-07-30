@@ -88,12 +88,13 @@ function CloseIcon() {
     stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" /></svg>;
 }
 
-function Modal({ title, children, onClose, locked = false, dismissDisabled = false }: {
+function Modal({ title, children, onClose, locked = false, dismissDisabled = false, compact = false }: {
   title: string;
   children: ComponentChildren;
   onClose: () => void;
   locked?: boolean;
   dismissDisabled?: boolean;
+  compact?: boolean;
 }) {
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -113,7 +114,7 @@ function Modal({ title, children, onClose, locked = false, dismissDisabled = fal
       if (!locked && !dismissDisabled && event.target === event.currentTarget) onClose();
     }}>
     <section role="dialog" aria-modal="true" aria-label={title}
-      class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-neutral-400 bg-white p-5 shadow-xl">
+      class={`max-h-[90vh] w-full overflow-y-auto rounded-xl border border-neutral-400 bg-white p-5 shadow-xl ${compact ? "max-w-md" : "max-w-2xl"}`}>
       <header class="mb-5 flex items-start justify-between gap-4">
         <h3 class="text-xl font-semibold text-neutral-950">{title}</h3>
         {!locked && <button type="button" aria-label="关闭" title="关闭"
@@ -191,6 +192,7 @@ function Onboarding() {
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [verificationError, setVerificationError] = useState("");
 
   useEffect(() => {
     if (!session) return;
@@ -205,7 +207,10 @@ function Onboarding() {
     try {
       if (!skip && email !== session.user.email) {
         await request("/email-otp/request-email-change", { newEmail: email });
-        setSent(true); setBusy(false); return;
+        setOtp("");
+        setVerificationError("");
+        setSent(true);
+        return;
       }
       await request("/update-user", skip
         ? { onboardingCompleted: true }
@@ -213,37 +218,82 @@ function Onboarding() {
       location.assign(afterOnboarding(location.search));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "保存失败");
+    } finally {
       setBusy(false);
     }
   }
 
-  async function verify() {
-    setBusy(true); setError("");
+  async function verify(event: Event) {
+    event.preventDefault();
+    setBusy(true); setVerificationError("");
     try {
       await request("/email-otp/change-email", { newEmail: email, otp });
       await request("/update-user", { name, onboardingCompleted: true });
       location.assign(afterOnboarding(location.search));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "验证失败");
+      setVerificationError(reason instanceof Error ? reason.message : "验证失败");
+    } finally {
       setBusy(false);
     }
   }
 
+  function closeVerification() {
+    setSent(false);
+    setOtp("");
+    setVerificationError("");
+  }
+
   if (!session) return <Layout title="首次设置"><p>加载中</p></Layout>;
   return <Layout title="首次设置">
-    <p>可以使用默认资料，也可以现在修改</p>
-    <label>姓名<input value={name} onInput={(event) => setName(event.currentTarget.value)} /></label>
-    <label>邮箱<input type="email" value={email}
-      onInput={(event) => setEmail(event.currentTarget.value)} /></label>
-    {sent && <label>验证码<input inputMode="numeric" value={otp}
-      onInput={(event) => setOtp(event.currentTarget.value)} /></label>}
-    <div>
-      <button disabled={busy} onClick={() => sent ? verify() : finish()}>
-        {sent ? "确认" : "完成"}
-      </button>
-      {!sent && <button disabled={busy} onClick={() => finish(true)}>跳过</button>}
-    </div>
-    <ErrorText value={error} />
+    <p class="mb-5 text-sm text-neutral-700">可以使用默认资料，也可以现在修改</p>
+    <form onSubmit={(event) => { event.preventDefault(); finish(); }}>
+      <fieldset disabled={busy} class="space-y-4">
+        <div>
+          <label htmlFor="onboarding_name_field" class="mb-1 block text-sm">姓名</label>
+          <input id="onboarding_name_field" autofocus class="w-full" value={name}
+            onInput={(event) => setName(event.currentTarget.value)} />
+        </div>
+        <div>
+          <label htmlFor="onboarding_email_field" class="mb-1 block text-sm">邮箱</label>
+          <input id="onboarding_email_field" required class="w-full" type="email" value={email}
+            onInput={(event) => setEmail(event.currentTarget.value)} />
+          <p class="mt-1 text-xs text-neutral-500">修改邮箱后需要输入验证码</p>
+        </div>
+        <ErrorText value={error} />
+        <div class="flex justify-end gap-2 pt-1">
+          <button type="button"
+            class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
+            onClick={() => finish(true)}>跳过</button>
+          <button type="submit"
+            class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
+            完成
+          </button>
+        </div>
+      </fieldset>
+    </form>
+
+    {sent && <Modal title="验证邮箱" compact dismissDisabled={busy} onClose={closeVerification}>
+      <p class="text-sm text-neutral-700">验证码已发送至</p>
+      <strong class="mt-1 block break-all text-neutral-950">{email}</strong>
+      <form class="mt-5" onSubmit={verify}>
+        <fieldset disabled={busy}>
+          <label htmlFor="onboarding_otp_field" class="mb-1 block text-sm">验证码</label>
+          <input id="onboarding_otp_field" required autofocus class="w-full" inputMode="numeric"
+            autocomplete="one-time-code" maxLength={6} value={otp}
+            onInput={(event) => setOtp(event.currentTarget.value)} />
+          <ErrorText value={verificationError} />
+          <div class="mt-5 flex justify-end gap-2">
+            <button type="button"
+              class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
+              onClick={closeVerification}>取消</button>
+            <button type="submit"
+              class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
+              确认
+            </button>
+          </div>
+        </fieldset>
+      </form>
+    </Modal>}
   </Layout>;
 }
 
