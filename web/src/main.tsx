@@ -189,7 +189,7 @@ function Onboarding() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
-  const [sent, setSent] = useState(false);
+  const [verificationOpen, setVerificationOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [verificationError, setVerificationError] = useState("");
@@ -209,7 +209,7 @@ function Onboarding() {
         await request("/email-otp/request-email-change", { newEmail: email });
         setOtp("");
         setVerificationError("");
-        setSent(true);
+        setVerificationOpen(true);
         return;
       }
       await request("/update-user", skip
@@ -238,7 +238,7 @@ function Onboarding() {
   }
 
   function closeVerification() {
-    setSent(false);
+    setVerificationOpen(false);
     setOtp("");
     setVerificationError("");
   }
@@ -272,7 +272,7 @@ function Onboarding() {
       </fieldset>
     </form>
 
-    {sent && <Modal title="验证邮箱" compact dismissDisabled={busy} onClose={closeVerification}>
+    {verificationOpen && <Modal title="验证邮箱" compact dismissDisabled={busy} onClose={closeVerification}>
       <p class="text-sm text-neutral-700">验证码已发送至</p>
       <strong class="mt-1 block break-all text-neutral-950">{email}</strong>
       <form class="mt-5" onSubmit={verify}>
