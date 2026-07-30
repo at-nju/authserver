@@ -88,15 +88,16 @@ function CloseIcon() {
     stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" /></svg>;
 }
 
-function Modal({ title, children, onClose, locked = false }: {
+function Modal({ title, children, onClose, locked = false, dismissDisabled = false }: {
   title: string;
   children: ComponentChildren;
   onClose: () => void;
   locked?: boolean;
+  dismissDisabled?: boolean;
 }) {
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !locked) onClose();
+      if (event.key === "Escape" && !locked && !dismissDisabled) onClose();
     };
     document.addEventListener("keydown", closeOnEscape);
     const previousOverflow = document.body.style.overflow;
@@ -105,11 +106,11 @@ function Modal({ title, children, onClose, locked = false }: {
       document.removeEventListener("keydown", closeOnEscape);
       document.body.style.overflow = previousOverflow;
     };
-  }, [locked, onClose]);
+  }, [dismissDisabled, locked, onClose]);
 
   return <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
     onMouseDown={(event) => {
-      if (!locked && event.target === event.currentTarget) onClose();
+      if (!locked && !dismissDisabled && event.target === event.currentTarget) onClose();
     }}>
     <section role="dialog" aria-modal="true" aria-label={title}
       class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-neutral-400 bg-white p-5 shadow-xl sm:p-6">
@@ -117,6 +118,7 @@ function Modal({ title, children, onClose, locked = false }: {
         <h3 class="text-xl font-semibold text-neutral-950">{title}</h3>
         {!locked && <button type="button" aria-label="关闭" title="关闭"
           class="rounded-md border border-neutral-300 bg-white p-1.5 text-neutral-900 hover:bg-neutral-100"
+          disabled={dismissDisabled}
           onClick={onClose}><CloseIcon /></button>}
       </header>
       {children}
@@ -279,7 +281,7 @@ function Consent() {
 
   return <Layout title="授权确认">
     {client ? <>
-      <p><strong>{clientNameOrId(client)}</strong> 请求访问：</p>
+      <p><strong>{client.client_name ?? client.client_id}</strong> 请求访问：</p>
       <ul>{(params.get("scope") ?? "").split(" ").filter(Boolean)
         .map((scope) => <li key={scope}>{scope}</li>)}</ul>
       <div>
@@ -600,7 +602,7 @@ function Console() {
     </div>
 
     {clientDialog && <Modal title={clientDialog.mode === "create" ? "创建 OIDC 应用" : "编辑 OIDC 应用"}
-      onClose={() => !clientBusy && setClientDialog(null)}>
+      dismissDisabled={clientBusy} onClose={() => setClientDialog(null)}>
       <form onSubmit={saveClient}>
         <fieldset disabled={clientBusy} class="space-y-5">
           <div>
@@ -654,7 +656,7 @@ function Console() {
     </Modal>}
 
     {clientConfirmation?.action === "rotate" && <Modal title="轮换客户端密钥"
-      onClose={() => !clientBusy && setClientConfirmation(null)}>
+      dismissDisabled={clientBusy} onClose={() => setClientConfirmation(null)}>
       <p class="text-neutral-900">确定要为 <strong>{clientNameOrId(clientConfirmation.client)}</strong> 轮换密钥吗？</p>
       <p class="mt-3 rounded-md border border-neutral-300 bg-neutral-100 p-3 text-sm text-neutral-900">
         旧密钥将立即失效。仍在使用旧密钥的服务会中断，直到完成配置更新。
@@ -669,7 +671,7 @@ function Console() {
     </Modal>}
 
     {clientConfirmation?.action === "delete" && <Modal title="删除 OIDC 应用"
-      onClose={() => !clientBusy && setClientConfirmation(null)}>
+      dismissDisabled={clientBusy} onClose={() => setClientConfirmation(null)}>
       <p class="text-neutral-900">删除后，使用此客户端的登录流程将立即停止，且无法恢复。</p>
       <div class="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-neutral-950">
         <strong class="block">{clientNameOrId(clientConfirmation.client)}</strong>
