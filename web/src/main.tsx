@@ -61,7 +61,7 @@ function Layout({ title, children, wide = false }: {
       <h1 class="mb-4 text-xl font-bold">{title}</h1>
       {children}
     </section>
-    <footer class="mr-2 mt-2 text-right text-sm text-neutral-500">
+    <footer class="mr-2 mt-2 mb-6 text-right text-sm text-neutral-500">
       <a href="https://github.com/at-nju/authserver"
         target="_blank" rel="noopener noreferrer">本项目 </a>以
       <a href="https://github.com/at-nju/authserver/blob/main/LICENSE"
@@ -124,6 +124,39 @@ function Modal({ title, children, onClose, locked = false, dismissDisabled = fal
       {children}
     </section>
   </div>;
+}
+
+function EmailVerificationModal({ email, otp, busy, error, onOtpInput, onClose, onSubmit }: {
+  email: string;
+  otp: string;
+  busy: boolean;
+  error: string;
+  onOtpInput: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (event: Event) => void;
+}) {
+  return <Modal title="验证邮箱" compact dismissDisabled={busy} onClose={onClose}>
+    <p class="text-sm text-neutral-700">验证码已发送至</p>
+    <strong class="mt-1 block break-all text-neutral-950">{email}</strong>
+    <form class="mt-5" onSubmit={onSubmit}>
+      <fieldset disabled={busy}>
+        <label htmlFor="email_otp_field" class="mb-1 block text-sm">验证码</label>
+        <input id="email_otp_field" required autofocus class="w-full" inputMode="numeric"
+          autocomplete="one-time-code" maxLength={6} value={otp}
+          onInput={(event) => onOtpInput(event.currentTarget.value)} />
+        <ErrorText value={error} />
+        <div class="mt-5 flex justify-end gap-2">
+          <button type="button"
+            class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
+            onClick={onClose}>取消</button>
+          <button type="submit"
+            class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
+            确认
+          </button>
+        </div>
+      </fieldset>
+    </form>
+  </Modal>;
 }
 
 function useSession(login: string, revision = 0) {
@@ -272,28 +305,8 @@ function Onboarding() {
       </fieldset>
     </form>
 
-    {verificationOpen && <Modal title="验证邮箱" compact dismissDisabled={busy} onClose={closeVerification}>
-      <p class="text-sm text-neutral-700">验证码已发送至</p>
-      <strong class="mt-1 block break-all text-neutral-950">{email}</strong>
-      <form class="mt-5" onSubmit={verify}>
-        <fieldset disabled={busy}>
-          <label htmlFor="onboarding_otp_field" class="mb-1 block text-sm">验证码</label>
-          <input id="onboarding_otp_field" required autofocus class="w-full" inputMode="numeric"
-            autocomplete="one-time-code" maxLength={6} value={otp}
-            onInput={(event) => setOtp(event.currentTarget.value)} />
-          <ErrorText value={verificationError} />
-          <div class="mt-5 flex justify-end gap-2">
-            <button type="button"
-              class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
-              onClick={closeVerification}>取消</button>
-            <button type="submit"
-              class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
-              确认
-            </button>
-          </div>
-        </fieldset>
-      </form>
-    </Modal>}
+    {verificationOpen && <EmailVerificationModal email={email} otp={otp} busy={busy}
+      error={verificationError} onOtpInput={setOtp} onClose={closeVerification} onSubmit={verify} />}
   </Layout>;
 }
 
@@ -350,6 +363,7 @@ function Console() {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [emailVerificationOpen, setEmailVerificationOpen] = useState(false);
+  const [emailVerificationTarget, setEmailVerificationTarget] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailVerificationError, setEmailVerificationError] = useState("");
   const [clientName, setClientName] = useState("");
@@ -399,9 +413,11 @@ function Console() {
 
   async function requestEmailChange() {
     setError(""); setNotice(""); setEmailBusy(true);
+    const targetEmail = email;
     try {
-      await request("/email-otp/request-email-change", { newEmail: email });
+      await request("/email-otp/request-email-change", { newEmail: targetEmail });
       setOtp("");
+      setEmailVerificationTarget(targetEmail);
       setEmailVerificationError("");
       setEmailVerificationOpen(true);
     } catch (reason) {
@@ -415,8 +431,9 @@ function Console() {
     event.preventDefault();
     setEmailVerificationError(""); setEmailBusy(true);
     try {
-      await request("/email-otp/change-email", { newEmail: email, otp });
+      await request("/email-otp/change-email", { newEmail: emailVerificationTarget, otp });
       setEmailVerificationOpen(false);
+      setEmailVerificationTarget("");
       setOtp("");
       setNotice("邮箱已更新");
       refresh();
@@ -429,6 +446,7 @@ function Console() {
 
   function closeEmailVerification() {
     setEmailVerificationOpen(false);
+    setEmailVerificationTarget("");
     setOtp("");
     setEmailVerificationError("");
   }
@@ -588,7 +606,7 @@ function Console() {
           <div>
             <label htmlFor="email_field" class="text-sm">邮箱</label>
             <div class="mt-1 flex items-center justify-between gap-2">
-              <input id="email_field" class="w-full" type="email" value={email}
+              <input id="email_field" class="w-full" type="email" value={email} disabled={emailBusy}
                 onInput={(event) => setEmail(event.currentTarget.value)} />
               <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
                 onClick={requestEmailChange} disabled={emailBusy}>修改邮箱</button>
@@ -659,35 +677,15 @@ function Console() {
           <h3 class="font-semibold text-neutral-950">还没有 OIDC 应用</h3>
           <p class="mt-1 text-sm text-neutral-700">创建一个应用以接入 OIDC 登录</p>
           <button type="button"
-            class="mt-4 rounded-md border border-neutral-900 bg-neutral-100 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+            class="mt-4 rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
             onClick={openCreateClient}>创建第一个应用</button>
         </div>}
       </section>
     </div>
 
-    {emailVerificationOpen && <Modal title="验证邮箱" compact dismissDisabled={emailBusy}
-      onClose={closeEmailVerification}>
-      <p class="text-sm text-neutral-700">验证码已发送至</p>
-      <strong class="mt-1 block break-all text-neutral-950">{email}</strong>
-      <form class="mt-5" onSubmit={verifyEmailChange}>
-        <fieldset disabled={emailBusy}>
-          <label htmlFor="console_otp_field" class="mb-1 block text-sm">验证码</label>
-          <input id="console_otp_field" required autofocus class="w-full" inputMode="numeric"
-            autocomplete="one-time-code" maxLength={6} value={otp}
-            onInput={(event) => setOtp(event.currentTarget.value)} />
-          <ErrorText value={emailVerificationError} />
-          <div class="mt-5 flex justify-end gap-2">
-            <button type="button"
-              class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
-              onClick={closeEmailVerification}>取消</button>
-            <button type="submit"
-              class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
-              确认
-            </button>
-          </div>
-        </fieldset>
-      </form>
-    </Modal>}
+    {emailVerificationOpen && <EmailVerificationModal email={emailVerificationTarget} otp={otp}
+      busy={emailBusy} error={emailVerificationError} onOtpInput={setOtp}
+      onClose={closeEmailVerification} onSubmit={verifyEmailChange} />}
 
     {clientDialog && <Modal title={clientDialog.mode === "create" ? "创建 OIDC 应用" : "编辑 OIDC 应用"}
       dismissDisabled={clientBusy} onClose={() => setClientDialog(null)}>
