@@ -17,13 +17,21 @@ type Client = {
   client_secret?: string;
   client_name?: string;
   redirect_uris?: string[];
-  token_endpoint_auth_method?: string;
+  token_endpoint_auth_method?: "none" | "client_secret_basic";
 };
 
 type ClientKind = "public" | "confidential";
 type ClientDialog = { mode: "create" } | { mode: "edit"; client: Client };
 type ClientConfirmation = { action: "rotate" | "delete"; client: Client };
 type ClientResult = { clientId: string; clientName: string; secret?: string };
+
+function clientNameOrId(client: Client) {
+  return client.client_name?.trim() || client.client_id;
+}
+
+function isConfidentialClient(client: Client) {
+  return client.token_endpoint_auth_method === "client_secret_basic";
+}
 
 async function request<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
@@ -271,7 +279,7 @@ function Consent() {
 
   return <Layout title="授权确认">
     {client ? <>
-      <p><strong>{client.client_name ?? client.client_id}</strong> 请求访问：</p>
+      <p><strong>{clientNameOrId(client)}</strong> 请求访问：</p>
       <ul>{(params.get("scope") ?? "").split(" ").filter(Boolean)
         .map((scope) => <li key={scope}>{scope}</li>)}</ul>
       <div>
@@ -357,9 +365,9 @@ function Console() {
   }
 
   function openEditClient(client: Client) {
-    setClientName(client.client_name ?? "");
+    setClientName(client.client_name?.trim() ?? "");
     setRedirectUris(client.redirect_uris?.join("\n") ?? "");
-    setClientType(client.token_endpoint_auth_method === "none" ? "public" : "confidential");
+    setClientType(isConfidentialClient(client) ? "confidential" : "public");
     setClientDialogError("");
     setClientDialog({ mode: "edit", client });
   }
@@ -438,7 +446,7 @@ function Console() {
       setCopiedField("");
       setClientResult({
         clientId: source.client_id,
-        clientName: source.client_name ?? source.client_id,
+        clientName: clientNameOrId(source),
         ...(client.client_secret ? { secret: client.client_secret } : {}),
       });
       await reloadClients();
@@ -534,14 +542,14 @@ function Console() {
 
         {clients.length ? <div class="space-y-4">
           {clients.map((client) => {
-            const confidential = client.token_endpoint_auth_method !== "none";
+            const confidential = isConfidentialClient(client);
             return <article key={client.client_id}
               class="rounded-xl border border-neutral-300 bg-white p-4 shadow-sm sm:p-5">
               <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
                     <h3 class="text-lg font-semibold text-neutral-950">
-                      {client.client_name ?? client.client_id}
+                      {clientNameOrId(client)}
                     </h3>
                     <span class="rounded-full border border-neutral-300 bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-800">
                       {confidential ? "机密客户端" : "公开客户端"}
@@ -647,7 +655,7 @@ function Console() {
 
     {clientConfirmation?.action === "rotate" && <Modal title="轮换客户端密钥"
       onClose={() => !clientBusy && setClientConfirmation(null)}>
-      <p class="text-neutral-900">确定要为 <strong>{clientConfirmation.client.client_name ?? clientConfirmation.client.client_id}</strong> 轮换密钥吗？</p>
+      <p class="text-neutral-900">确定要为 <strong>{clientNameOrId(clientConfirmation.client)}</strong> 轮换密钥吗？</p>
       <p class="mt-3 rounded-md border border-neutral-300 bg-neutral-100 p-3 text-sm text-neutral-900">
         旧密钥将立即失效。仍在使用旧密钥的服务会中断，直到完成配置更新。
       </p>
@@ -664,11 +672,11 @@ function Console() {
       onClose={() => !clientBusy && setClientConfirmation(null)}>
       <p class="text-neutral-900">删除后，使用此客户端的登录流程将立即停止，且无法恢复。</p>
       <div class="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-neutral-950">
-        <strong class="block">{clientConfirmation.client.client_name ?? clientConfirmation.client.client_id}</strong>
+        <strong class="block">{clientNameOrId(clientConfirmation.client)}</strong>
         <code class="mt-1 block break-all">{clientConfirmation.client.client_id}</code>
       </div>
       <label htmlFor="delete_confirmation_field" class="mb-1.5 mt-4 block text-sm font-medium text-neutral-950">
-        输入“{clientConfirmation.client.client_name ?? clientConfirmation.client.client_id}”以确认删除
+        输入“{clientNameOrId(clientConfirmation.client)}”以确认删除
       </label>
       <input id="delete_confirmation_field" autofocus class="w-full" value={deleteConfirmation}
         disabled={clientBusy} onInput={(event) => setDeleteConfirmation(event.currentTarget.value)} />
@@ -676,7 +684,7 @@ function Console() {
       <fieldset disabled={clientBusy} class="mt-5 flex justify-end gap-2 border-t border-neutral-200 pt-4">
         <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
           onClick={() => setClientConfirmation(null)}>取消</button>
-        <button type="button" disabled={deleteConfirmation !== (clientConfirmation.client.client_name ?? clientConfirmation.client.client_id)}
+        <button type="button" disabled={deleteConfirmation !== clientNameOrId(clientConfirmation.client)}
           class="rounded-md border border-red-800 bg-white px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-50"
           onClick={removeClient}>删除应用</button>
       </fieldset>
@@ -685,7 +693,7 @@ function Console() {
     {clientResult && <Modal title={clientResult.secret ? "保存客户端凭据" : "应用创建成功"}
       locked={Boolean(clientResult.secret)} onClose={() => setClientResult(null)}>
       <p class="text-neutral-900"><strong>{clientResult.clientName}</strong> 的客户端凭据如下。</p>
-      {clientResult.secret && <p class="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-neutral-950">
+      {clientResult.secret && <p class="mt-3 rounded-md border border-neutral-300 bg-neutral-100 p-3 text-sm text-neutral-950">
         客户端密钥仅显示这一次。关闭前请将它保存到安全的位置。
       </p>}
       <dl class="mt-5 space-y-4">
