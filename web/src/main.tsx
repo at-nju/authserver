@@ -58,7 +58,7 @@ function Layout({ title, children, wide = false }: {
 }
 
 function ErrorText({ value }: { value: string }) {
-  return value ? <p class="mt-2 text-red-700">{value}</p> : null;
+  return value ? <p class="w-full rounded px-2 py-1 my-2 border border-red-300 bg-red-100 text-red-800">{value}</p> : null;
 }
 
 function useSession(login: string, revision = 0) {
@@ -99,16 +99,14 @@ function Login() {
   }
 
   return <Layout title="登录"><form onSubmit={submit}>
-    <label>
-      Token
-      <div class="flex items-center justify-between gap-2">
-        <input class="w-full rounded-md border border-neutral-400 p-1"
-          required type="password" autocomplete="off" autofocus value={token}
-          onInput={(event) => setToken(event.currentTarget.value)} />
-        <button class="shrink-0 px-2 py-1 cursor-pointer rounded-md border border-neutral-400 disabled:cursor-default disabled:opacity-50 bg-neutral-100 hover:bg-neutral-200"
-          disabled={busy}>登录</button>
-      </div>
-    </label>
+    <label htmlFor="token_field">Token</label>
+    <div class="flex items-center justify-between gap-2">
+      <input id="token_field" class="w-full rounded-md border border-neutral-400 p-1"
+        required type="password" autocomplete="off" autofocus value={token}
+        onInput={(event) => setToken(event.currentTarget.value)} />
+      <button class="shrink-0 px-2 py-1 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200"
+        disabled={busy}>登录</button>
+    </div>
     <ErrorText value={error} />
     <p class="mt-4 text-neutral-500">
       还没有 Token？
@@ -167,7 +165,7 @@ function Onboarding() {
     }
   }
 
-  if (!session) return <Layout title="首次设置"><p>加载中…</p></Layout>;
+  if (!session) return <Layout title="首次设置"><p>加载中</p></Layout>;
   return <Layout title="首次设置">
     <p>可以使用默认资料，也可以现在修改。</p>
     <label>姓名<input value={name} onInput={(event) => setName(event.currentTarget.value)} /></label>
@@ -177,7 +175,7 @@ function Onboarding() {
       onInput={(event) => setOtp(event.currentTarget.value)} /></label>}
     <div>
       <button disabled={busy} onClick={() => sent ? verify() : finish()}>
-        {sent ? (busy ? "验证中…" : "确认") : "完成"}
+        {sent ? "确认" : "完成"}
       </button>
       {!sent && <button disabled={busy} onClick={() => finish(true)}>跳过</button>}
     </div>
@@ -225,7 +223,7 @@ function Consent() {
         <button onClick={() => decide(true)}>允许</button>
         <button onClick={() => decide(false)}>拒绝</button>
       </div>
-    </> : !error && <p>加载中…</p>}
+    </> : !error && <p>加载中</p>}
     <ErrorText value={error} />
   </Layout>;
 }
@@ -333,33 +331,60 @@ function Console() {
     location.replace("/login");
   }
 
-  if (!session) return <Layout title="控制台"><p>加载中…</p></Layout>;
+  if (!session) return <Layout title="控制台"><p>加载中</p></Layout>;
   return <Layout title="控制台" wide>
-    <div><span>{session.user.id}</span><button onClick={logout}>退出</button></div>
+    <div class="text-sm mb-4 flex items-center justify-between">
+      <span class="text-neutral-400">ID {session.user.id}</span>
+      <button class="text-blue-500 hover:text-blue-700" onClick={logout}>退出</button>
+    </div>
+    {notice && <p>{notice}</p>}<ErrorText value={error} />
     <div>
-      <section><h2>个人资料</h2>
-        <label>姓名<input value={name} onInput={(event) => setName(event.currentTarget.value)} /></label>
-        <button onClick={saveName}>保存姓名</button>
-        <label>邮箱<input type="email" value={email}
-          onInput={(event) => setEmail(event.currentTarget.value)} /></label>
-        <small>{session.user.emailVerified ? "已验证" : "未验证"}</small>
-        {emailSent && <label>验证码<input inputMode="numeric" value={otp}
-          onInput={(event) => setOtp(event.currentTarget.value)} /></label>}
-        <button onClick={changeEmail}>{emailSent ? "确认邮箱" : "发送验证码"}</button>
+      <section><h2 class="mt-2 mb-4 font-semibold text-2xl">个人资料</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="name_field" class="ml-1">昵称</label>
+            <div class="mt-1 flex items-center justify-between gap-2">
+              <input id="name_field" class="w-full" value={name}
+                onInput={(event) => setName(event.currentTarget.value)} />
+              <button class="shrink-0 px-2 py-1 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200"
+                onClick={saveName}>保存昵称</button>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="email_field" class="ml-1">邮箱</label>
+            <div class="mt-1 flex items-center justify-between gap-2">
+              <input id="email_field" class="w-full" type="email" value={email}
+                onInput={(event) => setEmail(event.currentTarget.value)} />
+              <button class="shrink-0 px-2 py-1 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200"
+                onClick={changeEmail} disabled={emailSent}>修改邮箱</button>
+            </div>
+            {!emailSent && <small class="text-sm text-neutral-400 ml-1">
+              {session.user.emailVerified ? "已验证" : "未验证"}</small>}
+            {emailSent && <div>
+              <label htmlFor="code_field" class="ml-1">验证码</label>
+              <div class="mt-1 flex items-center justify-between gap-2">
+                <input id="code_field" class="w-full" inputMode="numeric" value={otp}
+                  onInput={(event) => setOtp(event.currentTarget.value)} />
+                <button class="shrink-0 px-2 py-1 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200"
+                  onClick={changeEmail}>确认邮箱</button>
+              </div>
+            </div>}
+          </div>
+        </div>
       </section>
-      <section><h2>OIDC 应用</h2>
+      <section><h2 class="mt-2 mb-4 font-semibold text-2xl">OIDC 应用</h2>
         <form onSubmit={createClient}>
-          <label>名称<input required value={clientName}
+          <label>客户端名称<input required value={clientName}
             onInput={(event) => setClientName(event.currentTarget.value)} /></label>
-          <label>Redirect URI<input required type="url" value={redirectUri}
-            onInput={(event) => setRedirectUri(event.currentTarget.value)} /></label>
-          <label>类型<select value={clientType}
+          <label>客户端类型<select value={clientType}
             onChange={(event) => setClientType(event.currentTarget.value)}>
-            <option value="public">Public</option><option value="confidential">Confidential</option>
+            <option value="public">公开客户端</option><option value="confidential">机密客户端</option>
           </select></label>
+          <label>回调地址<input required type="url" value={redirectUri}
+            onInput={(event) => setRedirectUri(event.currentTarget.value)} /></label>
           <button>创建</button>
         </form>
-        {secret && <div><strong>Client Secret（仅显示一次）</strong>
+        {secret && <div><strong>客户端密码（仅显示一次）</strong>
           <code>{secret}</code><button onClick={() => setSecret("")}>关闭</button></div>}
         {clients.length ? clients.map((client) => <article key={client.client_id}>
           <div><strong>{client.client_name ?? client.client_id}</strong><code>{client.client_id}</code>
@@ -371,7 +396,6 @@ function Console() {
         </article>) : <p>暂无应用。</p>}
       </section>
     </div>
-    {notice && <p>{notice}</p>}<ErrorText value={error} />
   </Layout>;
 }
 

@@ -6,6 +6,14 @@
   }
 
   a {
-    @apply text-blue-500 hover:text-blue-700;
+    @apply text-blue-500 hover:text-blue-700 cursor-pointer;
+  }
+
+  button {
+    @apply cursor-pointer disabled:cursor-default disabled:opacity-50;
+  }
+
+  input {
+    @apply rounded-md border border-neutral-400 px-2 py-1;
   }
 }
