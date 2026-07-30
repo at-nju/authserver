@@ -42,14 +42,23 @@ function Layout({ title, children, wide = false }: {
   children: ComponentChildren;
   wide?: boolean;
 }) {
-  return <main class={wide ? "wide" : ""}>
-    <header>{__APP_NAME__}</header>
-    <section class="card"><h1>{title}</h1>{children}</section>
+  return <main class={`mx-auto px-4 ${wide ? "mt-[6vh] max-w-4xl" : "mt-[20vh] max-w-lg"}`}>
+    <header class="ml-2 mb-1 font-semibold text-neutral-500">{__APP_NAME__}</header>
+    <section class="rounded-xl border border-neutral-300 bg-white p-6">
+      <h1 class="mb-4 text-xl font-bold">{title}</h1>
+      {children}
+    </section>
+    <footer class="mr-2 mt-2 text-right text-sm text-neutral-500">
+      <a href="https://github.com/at-nju/authserver"
+        target="_blank" rel="noopener noreferrer">本项目 </a>以
+      <a href="https://github.com/at-nju/authserver/blob/main/LICENSE"
+        target="_blank" rel="noopener noreferrer"> GPL-3.0 </a>许可证发布
+    </footer>
   </main>;
 }
 
 function ErrorText({ value }: { value: string }) {
-  return value ? <p class="error">{value}</p> : null;
+  return value ? <p class="mt-2 text-red-700">{value}</p> : null;
 }
 
 function useSession(login: string, revision = 0) {
@@ -90,10 +99,22 @@ function Login() {
   }
 
   return <Layout title="登录"><form onSubmit={submit}>
-    <label>SeaTable Token<input required value={token}
-      onInput={(event) => setToken(event.currentTarget.value)} /></label>
-    <button disabled={busy}>{busy ? "登录中…" : "登录"}</button>
+    <label>
+      Token
+      <div class="flex items-center justify-between gap-2">
+        <input class="w-full rounded-md border border-neutral-400 p-1"
+          required type="password" autocomplete="off" autofocus value={token}
+          onInput={(event) => setToken(event.currentTarget.value)} />
+        <button class="shrink-0 px-2 py-1 cursor-pointer rounded-md border border-neutral-400 disabled:cursor-default disabled:opacity-50 bg-neutral-100 hover:bg-neutral-200"
+          disabled={busy}>登录</button>
+      </div>
+    </label>
     <ErrorText value={error} />
+    <p class="mt-4 text-neutral-500">
+      还没有 Token？
+      <a href="https://table.nju.edu.cn/apps/custom/authserver/"
+        target="_blank" rel="noopener noreferrer">点击此处获取</a>
+    </p>
   </form></Layout>;
 }
 
@@ -148,17 +169,17 @@ function Onboarding() {
 
   if (!session) return <Layout title="首次设置"><p>加载中…</p></Layout>;
   return <Layout title="首次设置">
-    <p class="muted">可以使用默认资料，也可以现在修改。</p>
+    <p>可以使用默认资料，也可以现在修改。</p>
     <label>姓名<input value={name} onInput={(event) => setName(event.currentTarget.value)} /></label>
     <label>邮箱<input type="email" value={email}
       onInput={(event) => setEmail(event.currentTarget.value)} /></label>
     {sent && <label>验证码<input inputMode="numeric" value={otp}
       onInput={(event) => setOtp(event.currentTarget.value)} /></label>}
-    <div class="actions">
+    <div>
       <button disabled={busy} onClick={() => sent ? verify() : finish()}>
         {sent ? (busy ? "验证中…" : "确认") : "完成"}
       </button>
-      {!sent && <button class="secondary" disabled={busy} onClick={() => finish(true)}>跳过</button>}
+      {!sent && <button disabled={busy} onClick={() => finish(true)}>跳过</button>}
     </div>
     <ErrorText value={error} />
   </Layout>;
@@ -200,9 +221,9 @@ function Consent() {
       <p><strong>{client.client_name ?? client.client_id}</strong> 请求访问：</p>
       <ul>{(params.get("scope") ?? "").split(" ").filter(Boolean)
         .map((scope) => <li key={scope}>{scope}</li>)}</ul>
-      <div class="actions">
+      <div>
         <button onClick={() => decide(true)}>允许</button>
-        <button class="secondary" onClick={() => decide(false)}>拒绝</button>
+        <button onClick={() => decide(false)}>拒绝</button>
       </div>
     </> : !error && <p>加载中…</p>}
     <ErrorText value={error} />
@@ -314,9 +335,9 @@ function Console() {
 
   if (!session) return <Layout title="控制台"><p>加载中…</p></Layout>;
   return <Layout title="控制台" wide>
-    <div class="top"><span>{session.user.id}</span><button class="secondary" onClick={logout}>退出</button></div>
-    <div class="grid">
-      <section class="panel"><h2>个人资料</h2>
+    <div><span>{session.user.id}</span><button onClick={logout}>退出</button></div>
+    <div>
+      <section><h2>个人资料</h2>
         <label>姓名<input value={name} onInput={(event) => setName(event.currentTarget.value)} /></label>
         <button onClick={saveName}>保存姓名</button>
         <label>邮箱<input type="email" value={email}
@@ -326,7 +347,7 @@ function Console() {
           onInput={(event) => setOtp(event.currentTarget.value)} /></label>}
         <button onClick={changeEmail}>{emailSent ? "确认邮箱" : "发送验证码"}</button>
       </section>
-      <section class="panel"><h2>OIDC 应用</h2>
+      <section><h2>OIDC 应用</h2>
         <form onSubmit={createClient}>
           <label>名称<input required value={clientName}
             onInput={(event) => setClientName(event.currentTarget.value)} /></label>
@@ -338,19 +359,19 @@ function Console() {
           </select></label>
           <button>创建</button>
         </form>
-        {secret && <div class="secret"><strong>Client Secret（仅显示一次）</strong>
-          <code>{secret}</code><button class="secondary" onClick={() => setSecret("")}>关闭</button></div>}
-        {clients.length ? clients.map((client) => <article class="client" key={client.client_id}>
+        {secret && <div><strong>Client Secret（仅显示一次）</strong>
+          <code>{secret}</code><button onClick={() => setSecret("")}>关闭</button></div>}
+        {clients.length ? clients.map((client) => <article key={client.client_id}>
           <div><strong>{client.client_name ?? client.client_id}</strong><code>{client.client_id}</code>
             <small>{client.redirect_uris?.join(", ")}</small></div>
-          <div class="actions"><button class="secondary" onClick={() => editClient(client)}>编辑</button>
+          <div><button onClick={() => editClient(client)}>编辑</button>
             {client.token_endpoint_auth_method !== "none" &&
-              <button class="secondary" onClick={() => rotate(client.client_id)}>轮换密钥</button>}
-            <button class="danger" onClick={() => remove(client.client_id)}>删除</button></div>
-        </article>) : <p class="muted">暂无应用。</p>}
+              <button onClick={() => rotate(client.client_id)}>轮换密钥</button>}
+            <button onClick={() => remove(client.client_id)}>删除</button></div>
+        </article>) : <p>暂无应用。</p>}
       </section>
     </div>
-    {notice && <p class="notice">{notice}</p>}<ErrorText value={error} />
+    {notice && <p>{notice}</p>}<ErrorText value={error} />
   </Layout>;
 }
 
