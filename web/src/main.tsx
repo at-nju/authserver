@@ -18,6 +18,7 @@ type Client = {
   client_name?: string;
   redirect_uris?: string[];
   token_endpoint_auth_method?: "none" | "client_secret_basic";
+  pinned_user_id?: string | null;
 };
 
 type ClientKind = "public" | "confidential";
@@ -369,6 +370,7 @@ function Console() {
   const [clientName, setClientName] = useState("");
   const [redirectUris, setRedirectUris] = useState("");
   const [clientType, setClientType] = useState<ClientKind>("public");
+  const [clientPinned, setClientPinned] = useState(false);
   const [clientDialog, setClientDialog] = useState<ClientDialog | null>(null);
   const [clientConfirmation, setClientConfirmation] = useState<ClientConfirmation | null>(null);
   const [clientResult, setClientResult] = useState<ClientResult | null>(null);
@@ -455,6 +457,7 @@ function Console() {
     setClientName("");
     setRedirectUris("");
     setClientType("public");
+    setClientPinned(false);
     setClientDialogError("");
     setClientDialog({ mode: "create" });
   }
@@ -463,6 +466,7 @@ function Console() {
     setClientName(client.client_name?.trim() ?? "");
     setRedirectUris(client.redirect_uris?.join("\n") ?? "");
     setClientType(isConfidentialClient(client) ? "confidential" : "public");
+    setClientPinned(Boolean(client.pinned_user_id));
     setClientDialogError("");
     setClientDialog({ mode: "edit", client });
   }
@@ -503,6 +507,12 @@ function Console() {
           client_id: clientDialog.client.client_id,
           update: { client_name: clientName.trim(), redirect_uris: uris },
         });
+        if (clientPinned !== Boolean(clientDialog.client.pinned_user_id)) {
+          await request("/oauth2/set-pinned-account", {
+            client_id: clientDialog.client.client_id,
+            pinned: clientPinned,
+          });
+        }
         setClientDialog(null);
       } else {
         const client = await request<Client>("/oauth2/create-client", {
@@ -513,6 +523,9 @@ function Console() {
           response_types: ["code"],
           type: clientType === "public" ? "user-agent-based" : "web",
         });
+        if (clientPinned) {
+          await request("/oauth2/set-pinned-account", { client_id: client.client_id, pinned: true });
+        }
         setClientDialog(null);
         setSecretSaved(false);
         setCopiedField("");
@@ -638,6 +651,9 @@ function Console() {
                     <span class="rounded-full border border-neutral-300 bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-800">
                       {confidential ? "机密客户端" : "公开客户端"}
                     </span>
+                    {client.pinned_user_id && <span class="rounded-full border border-neutral-300 bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-800">
+                      固定账户
+                    </span>}
                   </div>
                   <dl class="mt-4 space-y-4">
                     <div>
@@ -727,6 +743,20 @@ function Console() {
               placeholder={'https://example.com/callback\nhttp://localhost:3000/callback'} value={redirectUris}
               onInput={(event) => setRedirectUris(event.currentTarget.value)} />
             <p class="mt-1.5 text-xs text-neutral-700">每行填写一个完整的 HTTP 或 HTTPS 地址</p>
+          </div>
+
+          <div>
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-neutral-950">
+              <input type="checkbox" class="mt-0.5 h-4 w-4 p-0" checked={clientPinned}
+                onChange={(event) => setClientPinned(event.currentTarget.checked)} />
+              <span>固定账户</span>
+            </label>
+            <p class="mt-1.5 text-xs text-neutral-700">
+              开启后，任何人登录该应用都会返回同一个共享账户身份，且不再显示授权确认页
+              {clientDialog.mode === "edit" && clientPinned && <code class="mt-1 block break-all text-neutral-500">
+                {`service.${clientDialog.client.client_id}@nju.at`}
+              </code>}
+            </p>
           </div>
           <ErrorText value={clientDialogError} />
           <div class="flex justify-end gap-2">
