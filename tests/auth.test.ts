@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuth, type Bindings } from "../src/auth";
@@ -15,7 +15,9 @@ afterEach(() => {
 describe("authentication flow", () => {
   it("creates the default profile, session, and an OIDC client", async () => {
     const db = new DatabaseSync(":memory:");
-    db.exec(readFileSync("migrations/0001_auth.sql", "utf8"));
+    for (const file of readdirSync("migrations").filter((name) => name.endsWith(".sql")).sort()) {
+      db.exec(readFileSync(`migrations/${file}`, "utf8"));
+    }
     const env = {
       AUTH_DB: db as unknown as D1Database,
       ASSETS: {} as Fetcher,
