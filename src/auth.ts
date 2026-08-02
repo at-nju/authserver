@@ -1,12 +1,13 @@
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import type { BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthEndpoint, formCsrfMiddleware, originCheck } from "better-auth/api";
+import { APIError, createAuthEndpoint, formCsrfMiddleware, originCheck, sessionMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { emailOTP, jwt } from "better-auth/plugins";
 import { z } from "zod";
 import { config, type Env } from "../config";
 import { afterLogin } from "./navigation";
+import { sharedEmail, sharedUserId } from "./pinned";
 
 export type Bindings = Env & { AUTH_DB: D1Database; ASSETS: Fetcher };
 type HttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -67,6 +68,51 @@ async function sendOtp(env: Pick<Bindings, "SMTP_PASSWORD">, email: string, otp:
       text: config.email.text(otp),
     },
   );
+}
+
+function pinnedAccountPlugin(env: Bindings) {
+  return {
+    id: "pinned-account",
+    endpoints: {
+      setPinnedAccount: createAuthEndpoint(
+        "/oauth2/set-pinned-account",
+        {
+          method: "POST",
+          body: z.object({ client_id: z.string().min(1), pinned: z.boolean() }),
+          use: [sessionMiddleware, formCsrfMiddleware, originCheck(() => "/")],
+        },
+        async (ctx) => {
+          const owner = (ctx.context.session as { user: { id: string } } | null)?.user;
+          if (!owner) throw new APIError("UNAUTHORIZED", { message: "Not signed in" });
+          const client = await ctx.context.adapter.findOne({
+            model: "oauthClient",
+            where: [{ field: "clientId", value: ctx.body.client_id }],
+          }) as { clientId: string; name: string | null; userId: string } | null;
+          if (!client) throw new APIError("NOT_FOUND", { message: "Client not found" });
+          if (client.userId !== owner.id) throw new APIError("UNAUTHORIZED", { message: "Not your client" });
+
+          if (ctx.body.pinned) {
+            const userId = sharedUserId(client.clientId);
+            if (!await ctx.context.internalAdapter.findUserById(userId)) {
+              await ctx.context.internalAdapter.createUser({
+                id: userId,
+                name: client.name ?? client.clientId,
+                email: sharedEmail(client.clientId),
+                emailVerified: true,
+                onboardingCompleted: false,
+              });
+            }
+            await env.AUTH_DB.prepare("UPDATE oauthClient SET pinnedUserId = ?, skipConsent = 1 WHERE clientId = ?")
+              .bind(userId, client.clientId).run();
+          } else {
+            await env.AUTH_DB.prepare("UPDATE oauthClient SET pinnedUserId = NULL WHERE clientId = ?")
+              .bind(client.clientId).run();
+          }
+          return ctx.json({ pinned: ctx.body.pinned });
+        },
+      ),
+    },
+  } satisfies BetterAuthPlugin;
 }
 
 function seaTablePlugin(env: Bindings) {
@@ -172,6 +218,7 @@ export function createAuth(env: Bindings, baseURL: string) {
         storeTokens: "hashed",
       }),
       seaTablePlugin(env),
+      pinnedAccountPlugin(env),
     ],
   });
 }
