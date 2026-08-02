@@ -9,7 +9,7 @@ export function sharedUserId(clientId: string): string {
 }
 
 export function sharedEmail(clientId: string): string {
-  return `service.${clientId}@nju.at`;
+  return `service.${clientId.toLowerCase()}@nju.at`;
 }
 
 function randomToken(): string {
