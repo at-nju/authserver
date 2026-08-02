@@ -745,7 +745,7 @@ function Console() {
             <p class="mt-1.5 text-xs text-neutral-700">每行填写一个完整的 HTTP 或 HTTPS 地址</p>
           </div>
 
-          <div>
+          <div class="rounded-md border border-neutral-400 bg-neutral-50 p-3">
             <label class="flex cursor-pointer items-center gap-2 text-sm text-neutral-950">
               <input type="checkbox" class="mt-0.5 h-4 w-4 p-0" checked={clientPinned}
                 onChange={(event) => setClientPinned(event.currentTarget.checked)} />
