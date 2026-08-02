@@ -1,4 +1,5 @@
 import { getAuth, type Bindings } from "./auth";
+import { attachPinnedUsers, authorizeWithPinnedUser } from "./pinned";
 
 const pages = new Set(["/login", "/onboarding", "/consent", "/console"]);
 const authPaths = new Set([
@@ -21,6 +22,7 @@ const authPaths = new Set([
   "/oauth2/update-client",
   "/oauth2/client/rotate-secret",
   "/oauth2/delete-client",
+  "/oauth2/set-pinned-account",
 ]);
 
 async function hasResource(request: Request): Promise<boolean> {
@@ -100,9 +102,12 @@ export default {
       );
     }
 
-    let response = await getAuth(env, url.origin).handler(request);
+    let response = path === "/oauth2/authorize"
+      ? await authorizeWithPinnedUser(env.AUTH_DB, env.BETTER_AUTH_SECRET, request, (req) => getAuth(env, url.origin).handler(req))
+      : await getAuth(env, url.origin).handler(request);
     if (path.startsWith("/.well-known/")) response = await cleanMetadata(response);
     if (path === "/oauth2/authorize") response = await browserRedirect(response);
+    if (path === "/oauth2/get-clients") response = await attachPinnedUsers(env.AUTH_DB, response);
     return response;
   },
 } satisfies ExportedHandler<Bindings>;
