@@ -13,6 +13,7 @@ type User = {
   onboardingCompleted?: boolean;
 };
 type Session = { session: { id: string }; user: User };
+type Account = { providerId: string; accountId: string };
 type Client = {
   client_id: string;
   client_secret?: string;
@@ -432,6 +433,8 @@ function Console() {
   const [revision, setRevision] = useState(0);
   const session = useSession("/login?return_to=/console", revision);
   const [clients, setClients] = useState<Client[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [linkToken, setLinkToken] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -462,9 +465,17 @@ function Console() {
     }
   };
 
+  const reloadAccounts = async () => {
+    try {
+      setAccounts(await request<Account[]>("/accounts"));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "请求失败");
+    }
+  };
+
   useEffect(() => {
     if (!session) return;
-    setName(session.user.name); setEmail(session.user.email); reloadClients();
+    setName(session.user.name); setEmail(session.user.email); reloadClients(); reloadAccounts();
   }, [session]);
 
   async function run(action: () => Promise<unknown>, success?: string) {
@@ -483,6 +494,26 @@ function Console() {
 
   async function saveName() {
     if (await run(() => request("/update-user", { name }), "姓名已保存")) refresh();
+  }
+
+  async function linkSeaTable(event: Event) {
+    event.preventDefault();
+    if (await run(() => request("/accounts/link/seatable", { token: linkToken }), "SeaTable 已绑定")) {
+      setLinkToken("");
+      await reloadAccounts();
+    }
+  }
+
+  async function linkOidc() {
+    const result = await request<{ url: string }>("/oauth2/link", {
+      providerId: "upstream-oidc",
+      callbackURL: "/console",
+    });
+    location.assign(result.url);
+  }
+
+  async function unlinkAccount(account: Account) {
+    if (await run(() => request("/accounts/unlink", account), "登录方式已解绑")) await reloadAccounts();
   }
 
   async function requestEmailChange() {
@@ -699,6 +730,34 @@ function Console() {
             <small class="text-sm text-neutral-400">
               {session.user.emailVerified ? "已验证" : "未验证"}</small>
           </div>
+        </div>
+      </section>
+      <section class="mt-6">
+        <h2 class="mb-4 font-semibold text-2xl">登录方式</h2>
+        <div class="space-y-2">
+          {accounts.map((account) => <div key={`${account.providerId}:${account.accountId}`}
+            class="flex items-center justify-between gap-3 rounded-md border border-neutral-300 p-3">
+            <div class="min-w-0">
+              <strong class="block text-sm">{account.providerId}</strong>
+              <span class="block truncate text-xs text-neutral-500">{account.accountId}</span>
+            </div>
+            {account.providerId !== "email" && <button type="button" class="text-sm text-red-700"
+              onClick={() => unlinkAccount(account)}>解绑</button>}
+          </div>)}
+        </div>
+        {config.providers.seatable.enabled && !accounts.some((account) => account.providerId === "seatable") &&
+          <form class="mt-3 flex gap-2" onSubmit={linkSeaTable}>
+            <input class="min-w-0 flex-1" type="password" required placeholder="SeaTable Token"
+              value={linkToken} onInput={(event) => setLinkToken(event.currentTarget.value)} />
+            <button class="rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm">绑定</button>
+          </form>}
+        <div class="mt-3 flex flex-wrap gap-2">
+          {config.providers.discourse.enabled && !accounts.some((account) => account.providerId === "discourse") &&
+            <a class="rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm"
+              href="/sign-in/discourse?return_to=%2Fconsole">绑定 Discourse</a>}
+          {config.providers.upstreamOidc.enabled && !accounts.some((account) => account.providerId === "upstream-oidc") &&
+            <button type="button" class="rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm"
+              onClick={linkOidc}>绑定 OIDC</button>}
         </div>
       </section>
       <section class="mt-6">
