@@ -20,6 +20,18 @@ type AuthContext = {
   };
 };
 
+async function first<T>(db: D1Database, sql: string, values: unknown[]) {
+  const statement = db.prepare(sql) as any;
+  return statement.bind
+    ? await statement.bind(...values).first() as T | null
+    : statement.get(...values) as T | null;
+}
+
+async function run(db: D1Database, sql: string, values: unknown[]) {
+  const statement = db.prepare(sql) as any;
+  return statement.bind ? statement.bind(...values).run() : statement.run(...values);
+}
+
 export async function resolveIdentity(
   ctx: AuthContext,
   db: D1Database,
@@ -27,9 +39,11 @@ export async function resolveIdentity(
   registration: RegistrationPolicy,
   linkUserId?: string,
 ) {
-  const account = await db.prepare(
+  const account = await first<{ userId: string }>(
+    db,
     "SELECT userId FROM account WHERE providerId = ? AND accountId = ?",
-  ).bind(identity.providerId, identity.accountId).first<{ userId: string }>();
+    [identity.providerId, identity.accountId],
+  );
 
   if (account) {
     if (linkUserId && account.userId !== linkUserId) {
@@ -57,16 +71,20 @@ export async function resolveIdentity(
   });
 
   const now = new Date().toISOString();
-  await db.prepare(
+  await run(
+    db,
     "INSERT INTO account (id, accountId, providerId, userId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
-  ).bind(crypto.randomUUID(), identity.accountId, identity.providerId, user.id, now, now).run();
+    [crypto.randomUUID(), identity.accountId, identity.providerId, user.id, now, now],
+  );
   return user;
 }
 
 export async function ensureEmailAccount(db: D1Database, userId: string, email: string) {
   const normalized = email.trim().toLowerCase();
   const now = new Date().toISOString();
-  await db.prepare(
+  await run(
+    db,
     "INSERT OR IGNORE INTO account (id, accountId, providerId, userId, createdAt, updatedAt) VALUES (?, ?, 'email', ?, ?, ?)",
-  ).bind(crypto.randomUUID(), normalized, userId, now, now).run();
+    [crypto.randomUUID(), normalized, userId, now, now],
+  );
 }
