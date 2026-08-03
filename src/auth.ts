@@ -3,72 +3,20 @@ import { betterAuth } from "better-auth";
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthEndpoint, formCsrfMiddleware, originCheck, sessionMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
-import { emailOTP, jwt } from "better-auth/plugins";
+import { jwt } from "better-auth/plugins";
 import { z } from "zod";
 import { config, type Env } from "../config";
 import { afterLogin } from "./navigation";
 import { sharedEmail, sharedUserId } from "./pinned";
+import {
+  authenticateSeaTableToken,
+  createDiscourseProvider,
+  createEmailProvider,
+  createOidcProvider,
+} from "./providers";
 
 export type Bindings = Env & { AUTH_DB: D1Database; ASSETS: Fetcher };
-type HttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-
-export async function authenticateSeaTableToken(
-  env: Pick<Bindings, "SEATABLE_API_TOKEN">,
-  rawToken: string,
-  fetcher: HttpFetch = fetch,
-): Promise<{ id: string } | null> {
-  const token = rawToken.trim();
-  if (!token) return null;
-
-  const base = config.seatable.baseUrl.replace(/\/$/, "");
-  const accessResponse = await fetcher(`${base}/api/v2.1/dtable/app-access-token/`, {
-    headers: { Authorization: `Bearer ${env.SEATABLE_API_TOKEN}` },
-  });
-  if (!accessResponse.ok) throw new Error("SeaTable access failed");
-
-  const access = await accessResponse.json<{ access_token: string; dtable_uuid: string }>();
-  const { tableName, idColumn, tokenColumn } = config.seatable;
-  const queryResponse = await fetcher(
-    `${base}/api-gateway/api/v2/dtables/${access.dtable_uuid}/sql/`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${access.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        sql: `SELECT \`${idColumn}\` FROM \`${tableName}\` WHERE \`${tokenColumn}\` = ? LIMIT 1`,
-        parameters: [token],
-        convert_keys: true,
-      }),
-    },
-  );
-  if (!queryResponse.ok) throw new Error("SeaTable query failed");
-
-  const result = await queryResponse.json<{ results?: Array<Record<string, unknown>> }>();
-  const id = String(result.results?.[0]?.[idColumn] ?? "").trim();
-  return id ? { id } : null;
-}
-
-async function sendOtp(env: Pick<Bindings, "SMTP_PASSWORD">, email: string, otp: string) {
-  const { WorkerMailer } = await import("worker-mailer");
-  await WorkerMailer.send(
-    {
-      host: config.smtp.host,
-      port: config.smtp.port,
-      secure: config.smtp.secure,
-      startTls: !config.smtp.secure,
-      authType: "login",
-      credentials: { username: config.smtp.username, password: env.SMTP_PASSWORD },
-    },
-    {
-      from: { name: config.appName, email: config.smtp.from },
-      to: email,
-      subject: config.email.subject,
-      text: config.email.text(otp),
-    },
-  );
-}
+export { authenticateSeaTableToken } from "./providers";
 
 function pinnedAccountPlugin(env: Bindings) {
   return {
@@ -131,7 +79,7 @@ function seaTablePlugin(env: Bindings) {
           use: [formCsrfMiddleware, originCheck((ctx) => ctx.body.return_to ?? "/")],
         },
         async (ctx) => {
-          let identity: { id: string } | null;
+          let identity: Awaited<ReturnType<typeof authenticateSeaTableToken>>;
           try {
             identity = await authenticateSeaTableToken(env, ctx.body.token);
           } catch {
@@ -143,8 +91,8 @@ function seaTablePlugin(env: Bindings) {
           user ??= await ctx.context.internalAdapter.createUser({
             id: identity.id,
             name: identity.id,
-            email: config.user.defaultEmail(identity.id),
-            emailVerified: false,
+            email: identity.email,
+            emailVerified: identity.emailVerified,
             onboardingCompleted: false,
           });
           if (!user) throw new APIError("INTERNAL_SERVER_ERROR");
@@ -194,14 +142,7 @@ export function createAuth(env: Bindings, baseURL: string) {
         disableSettingJwtHeader: true,
         jwks: { keyPairConfig: { alg: "RS256", modulusLength: 2048 } },
       }),
-      emailOTP({
-        disableSignUp: true,
-        otpLength: config.email.otpLength,
-        expiresIn: config.email.otpTtlSeconds,
-        storeOTP: "hashed",
-        changeEmail: { enabled: true, verifyCurrentEmail: false },
-        sendVerificationOTP: ({ email, otp }) => sendOtp(env, email, otp),
-      }),
+      createEmailProvider(env),
       oauthProvider({
         loginPage: "/login",
         consentPage: "/consent",
@@ -219,6 +160,8 @@ export function createAuth(env: Bindings, baseURL: string) {
       }),
       seaTablePlugin(env),
       pinnedAccountPlugin(env),
+      ...(config.providers.discourse.enabled ? [createDiscourseProvider(env, baseURL)] : []),
+      ...(config.providers.upstreamOidc.enabled ? [createOidcProvider(env)] : []),
     ],
   });
 }

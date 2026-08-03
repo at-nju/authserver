@@ -8,7 +8,12 @@ describe("SeaTable login", () => {
       .mockResolvedValueOnce(Response.json({ results: [{ ID: "  user  " }] }));
 
     await expect(authenticateSeaTableToken({ SEATABLE_API_TOKEN: "app" }, "token", fetcher))
-      .resolves.toEqual({ id: "user" });
+      .resolves.toEqual({
+        id: "user",
+        name: "user",
+        email: "user@smail.nju.edu.cn",
+        emailVerified: false,
+      });
 
     expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toMatchObject({
       parameters: ["token"],
