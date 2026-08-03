@@ -456,6 +456,9 @@ function Console() {
   const [copiedField, setCopiedField] = useState<"client-id" | "secret" | "">("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountConfirmation, setDeleteAccountConfirmation] = useState("");
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
 
   const reloadClients = async () => {
     try {
@@ -698,6 +701,17 @@ function Console() {
     await request("/sign-out", {});
     location.replace("/login");
   }
+  async function deleteAccount() {
+    setDeleteAccountBusy(true); setError("");
+    try {
+      await request("/accounts/delete", { confirmation: deleteAccountConfirmation });
+      location.replace("/login");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "注销失败");
+      setDeleteAccountBusy(false);
+    }
+  }
+
 
   if (!session) return <Layout title="控制台"><p>加载中</p></Layout>;
   return <Layout title="控制台" wide>
@@ -760,6 +774,18 @@ function Console() {
               onClick={linkOidc}>绑定 OIDC</button>}
         </div>
       </section>
+      <section class="mt-8 border-t border-red-200 pt-6">
+        <h2 class="font-semibold text-2xl text-red-800">危险操作</h2>
+        <div class="mt-4 flex items-center justify-between gap-4 rounded-md border border-red-300 bg-red-50 p-4">
+          <div>
+            <strong class="text-sm text-red-900">注销账户</strong>
+            <p class="mt-1 text-xs text-red-800">永久删除账户、登录方式、会话、OIDC 应用和授权记录。</p>
+          </div>
+          <button type="button" class="shrink-0 rounded-md border border-red-700 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-100"
+            onClick={() => { setDeleteAccountConfirmation(""); setDeleteAccountOpen(true); }}>注销账户</button>
+        </div>
+      </section>
+
       <section class="mt-6">
         <header class="mb-5 flex items-center justify-between gap-4">
           <h2 class="font-semibold text-2xl text-neutral-950">OIDC 应用</h2>
@@ -829,6 +855,20 @@ function Console() {
         </div>}
       </section>
     </div>
+
+    {deleteAccountOpen && <Modal title="注销账户" compact dismissDisabled={deleteAccountBusy}
+      onClose={() => setDeleteAccountOpen(false)}>
+      <p class="text-sm text-neutral-900">此操作不可恢复。重新注册会获得新的 OIDC sub。</p>
+      <label htmlFor="delete_account_confirmation" class="mb-1 mt-4 block text-sm">输入 DELETE 确认</label>
+      <input id="delete_account_confirmation" autofocus class="w-full" value={deleteAccountConfirmation}
+        disabled={deleteAccountBusy} onInput={(event) => setDeleteAccountConfirmation(event.currentTarget.value)} />
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm"
+          disabled={deleteAccountBusy} onClick={() => setDeleteAccountOpen(false)}>取消</button>
+        <button type="button" class="rounded-md border border-red-800 bg-white px-3 py-1.5 text-sm text-red-800"
+          disabled={deleteAccountBusy || deleteAccountConfirmation !== "DELETE"} onClick={deleteAccount}>永久删除</button>
+      </div>
+    </Modal>}
 
     {emailVerificationOpen && <EmailVerificationModal email={emailVerificationTarget} otp={otp}
       busy={emailBusy} error={emailVerificationError} onOtpInput={setOtp}
