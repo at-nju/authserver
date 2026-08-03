@@ -33,6 +33,7 @@ const authPaths = new Set([
   "/oauth2/set-pinned-account",
   "/accounts",
   "/accounts/link/seatable",
+  "/accounts/link/discourse",
   "/accounts/unlink",
 ]);
 

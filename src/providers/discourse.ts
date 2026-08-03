@@ -1,5 +1,5 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthEndpoint } from "better-auth/api";
+import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { z } from "zod";
 import { config, type Env } from "../../config";
@@ -58,6 +58,28 @@ export function createDiscourseProvider(
           throw ctx.redirect(target.toString());
         },
       ),
+      linkDiscourse: createAuthEndpoint(
+        "/accounts/link/discourse",
+        { method: "GET", query: z.object({ return_to: z.string().optional() }), use: [sessionMiddleware] },
+        async (ctx) => {
+          const returnTo = new URL(ctx.query.return_to ?? "/console", baseURL);
+          if (returnTo.origin !== baseURL) throw new APIError("BAD_REQUEST");
+          const userId = (ctx.context.session as { user: { id: string } }).user.id;
+          const state = encode(JSON.stringify({
+            returnTo: `${returnTo.pathname}${returnTo.search}`,
+            expiresAt: Date.now() + 10 * 60 * 1000,
+            linkUserId: userId,
+          }));
+          const nonce = `${state}.${await hmac(secret, state)}`;
+          const sso = encode(new URLSearchParams({
+            nonce,
+            return_sso_url: `${baseURL}/sign-in/discourse/callback`,
+          }).toString());
+          const target = new URL("/session/sso_provider", provider.origin);
+          target.search = new URLSearchParams({ sso, sig: await hmac(secret, sso) }).toString();
+          throw ctx.redirect(target.toString());
+        },
+      ),
       discourseCallback: createAuthEndpoint(
         "/sign-in/discourse/callback",
         { method: "GET", query: z.object({ sso: z.string(), sig: z.string() }) },
@@ -71,7 +93,11 @@ export function createDiscourseProvider(
           if (!state || await hmac(secret, state) !== signature) {
             throw new APIError("UNAUTHORIZED");
           }
-          const attempt = JSON.parse(decode(state)) as { returnTo: string; expiresAt: number };
+          const attempt = JSON.parse(decode(state)) as {
+            returnTo: string;
+            expiresAt: number;
+            linkUserId?: string;
+          };
           if (attempt.expiresAt < Date.now()) throw new APIError("UNAUTHORIZED");
 
           const externalId = values.get(provider.fields.subject);
@@ -84,7 +110,7 @@ export function createDiscourseProvider(
             name,
             email: email.toLowerCase(),
             emailVerified: provider.fields.emailVerified,
-          }, provider.registration);
+          }, provider.registration, attempt.linkUserId);
           const session = await ctx.context.internalAdapter.createSession(user!.id, false);
           await setSessionCookie(ctx, { session: session!, user: user! });
           throw ctx.redirect(new URL(attempt.returnTo, baseURL).toString());

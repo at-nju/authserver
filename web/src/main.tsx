@@ -754,7 +754,7 @@ function Console() {
         <div class="mt-3 flex flex-wrap gap-2">
           {config.providers.discourse.enabled && !accounts.some((account) => account.providerId === "discourse") &&
             <a class="rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm"
-              href="/sign-in/discourse?return_to=%2Fconsole">绑定 Discourse</a>}
+              href="/accounts/link/discourse?return_to=%2Fconsole">绑定 Discourse</a>}
           {config.providers.upstreamOidc.enabled && !accounts.some((account) => account.providerId === "upstream-oidc") &&
             <button type="button" class="rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm"
               onClick={linkOidc}>绑定 OIDC</button>}
