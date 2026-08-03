@@ -155,6 +155,19 @@ function accountPlugin(env: Bindings) {
           return ctx.json({ success: true });
         },
       ),
+      deleteAccount: createAuthEndpoint(
+        "/accounts/delete",
+        {
+          method: "POST",
+          body: z.object({ confirmation: z.literal("DELETE") }),
+          use: [sessionMiddleware, formCsrfMiddleware, originCheck(() => "/console")],
+        },
+        async (ctx) => {
+          const userId = (ctx.context.session as { user: { id: string } }).user.id;
+          await ctx.context.internalAdapter.deleteUser(userId);
+          return ctx.json({ success: true });
+        },
+      ),
       unlinkAccount: createAuthEndpoint(
         "/accounts/unlink",
         {

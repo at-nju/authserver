@@ -35,6 +35,7 @@ const authPaths = new Set([
   "/accounts/link/seatable",
   "/accounts/link/discourse",
   "/accounts/unlink",
+  "/accounts/delete",
 ]);
 
 async function hasResource(request: Request): Promise<boolean> {
