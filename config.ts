@@ -61,9 +61,9 @@ export const config = {
       },
     },
     discourse: {
-      enabled: false,
+      enabled: true,
       registration: "allow",
-      origin: "https://forum.example.com",
+      origin: "https://forum.nju-aia.com",
       fields: {
         subject: "external_id",
         name: ["name", "username"],
