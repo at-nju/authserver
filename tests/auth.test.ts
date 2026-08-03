@@ -58,9 +58,10 @@ describe("authentication flow", () => {
     const headers = { Cookie: cookie!, Origin: "http://local.test", "Content-Type": "application/json" };
 
     const session = await auth.handler(new Request("http://local.test/get-session", { headers }));
-    expect(await session.json()).toMatchObject({
+    const sessionBody = await session.json() as { user: { id: string } };
+    expect(sessionBody.user.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(sessionBody).toMatchObject({
       user: {
-        id: "student",
         name: "student",
         email: "student@smail.nju.edu.cn",
         emailVerified: false,
@@ -162,7 +163,7 @@ describe("authentication flow", () => {
       headers: { Authorization: `Bearer ${tokenBody.access_token}` },
     }));
     expect(await userinfo.json()).toMatchObject({
-      sub: "student",
+      sub: sessionBody.user.id,
       name: "Student Name",
       email: "verified@example.com",
       email_verified: true,

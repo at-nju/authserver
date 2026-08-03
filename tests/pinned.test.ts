@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/worker";
-import { sharedEmail, sharedUserId } from "../src/pinned";
+import { sharedEmail } from "../src/pinned";
 
 const { mailSend } = vi.hoisted(() => ({ mailSend: vi.fn() }));
 vi.mock("worker-mailer", () => ({ WorkerMailer: { send: mailSend } }));
@@ -107,6 +107,8 @@ describe("pinned account", () => {
 
     const cookie = await login(env, origin);
     const headers = { Cookie: cookie, Origin: origin, "Content-Type": "application/json" };
+    const signedIn = await run(env, new Request(`${origin}/get-session`, { headers }));
+    const signedInUserId = (await signedIn.json() as { user: { id: string } }).user.id;
 
     const created = await run(env, new Request(`${origin}/oauth2/create-client`, {
       method: "POST",
@@ -130,7 +132,9 @@ describe("pinned account", () => {
     }));
     expect(pinned.status).toBe(200);
 
-    const svcId = sharedUserId(client.client_id);
+    const pinnedRow = db.prepare("SELECT pinnedUserId FROM oauthClient WHERE clientId = ?").get(client.client_id) as { pinnedUserId: string };
+    const svcId = pinnedRow.pinnedUserId;
+    expect(svcId).toMatch(/^[0-9a-f-]{36}$/);
     const userRow = db.prepare("SELECT id, name, email, emailVerified FROM user WHERE id = ?").get(svcId) as Record<string, unknown>;
     expect(userRow).toMatchObject({
       id: svcId,
@@ -161,7 +165,7 @@ describe("pinned account", () => {
     expect(callback.searchParams.get("code")).toBeTruthy();
 
     const session = await run(env, new Request(`${origin}/get-session`, { headers }));
-    expect(await session.json()).toMatchObject({ user: { id: "student" } });
+    expect(await session.json()).toMatchObject({ user: { id: signedInUserId } });
 
     const exchange = async (code: string) => {
       const token = await run(env, new Request(`${origin}/oauth2/token`, {
@@ -208,7 +212,7 @@ describe("pinned account", () => {
     expect(unpinned.status).toBe(200);
     const code3 = new URL((await run(env, new Request(authorizeUrl, { headers }))).headers.get("location")!)
       .searchParams.get("code")!;
-    expect(await exchange(code3)).toMatchObject({ sub: "student" });
+    expect(await exchange(code3)).toMatchObject({ sub: signedInUserId });
 
     db.close();
   });
