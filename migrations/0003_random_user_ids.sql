@@ -56,6 +56,11 @@ update "user" set id = (select newId from userIdMigration where oldId = "user".i
 
 drop table userIdMigration;
 
+delete from account
+where rowid not in (
+  select min(rowid) from account group by providerId, accountId
+);
+
 create unique index account_provider_account_idx on account (providerId, accountId);
 
 pragma foreign_keys = on;
