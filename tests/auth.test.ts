@@ -221,6 +221,24 @@ describe("authentication flow", () => {
       }),
     ]);
 
+    const invalidDelete = await auth.handler(new Request("http://local.test/accounts/delete", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ confirmation: "delete" }),
+    }));
+    expect(invalidDelete.status).toBe(400);
+
+    const deleted = await auth.handler(new Request("http://local.test/accounts/delete", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ confirmation: "DELETE" }),
+    }));
+    expect(deleted.status).toBe(200);
+    expect(db.prepare('SELECT count(*) AS count FROM "user" WHERE id = ?').get(sessionBody.user.id)).toMatchObject({ count: 0 });
+    expect(db.prepare("SELECT count(*) AS count FROM session WHERE userId = ?").get(sessionBody.user.id)).toMatchObject({ count: 0 });
+    expect(db.prepare("SELECT count(*) AS count FROM account WHERE userId = ?").get(sessionBody.user.id)).toMatchObject({ count: 0 });
+    expect(db.prepare("SELECT count(*) AS count FROM oauthClient WHERE userId = ?").get(sessionBody.user.id)).toMatchObject({ count: 0 });
+
     db.close();
   });
 });
