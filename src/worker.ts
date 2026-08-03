@@ -1,5 +1,6 @@
 import { getAuth, type Bindings } from "./auth";
-import { attachPinnedUsers, authorizeWithPinnedUser } from "./pinned";
+import { attachPinnedUsers, authorizeWithPinnedUser, findSessionUser, sessionTokenFromCookie } from "./pinned";
+import { ensureEmailAccount } from "./providers";
 
 const pages = new Set(["/login", "/onboarding", "/consent", "/console"]);
 const authPaths = new Set([
@@ -13,6 +14,7 @@ const authPaths = new Set([
   "/sign-in/discourse/callback",
   "/sign-in/oauth2",
   "/oauth2/callback/upstream-oidc",
+  "/oauth2/link",
   "/get-session",
   "/sign-out",
   "/update-user",
@@ -29,6 +31,9 @@ const authPaths = new Set([
   "/oauth2/client/rotate-secret",
   "/oauth2/delete-client",
   "/oauth2/set-pinned-account",
+  "/accounts",
+  "/accounts/link/seatable",
+  "/accounts/unlink",
 ]);
 
 async function hasResource(request: Request): Promise<boolean> {
@@ -108,9 +113,24 @@ export default {
       );
     }
 
+    const body = request.method === "POST" && (path === "/sign-in/email-otp" || path === "/email-otp/change-email")
+      ? await request.clone().json<{ email?: string; newEmail?: string }>()
+      : null;
     let response = path === "/oauth2/authorize"
       ? await authorizeWithPinnedUser(env.AUTH_DB, env.BETTER_AUTH_SECRET, request, (req) => getAuth(env, url.origin).handler(req))
       : await getAuth(env, url.origin).handler(request);
+    if (response.ok && path === "/sign-in/email-otp") {
+      const result = await response.clone().json<{ user: { id: string; email: string } }>();
+      await ensureEmailAccount(env.AUTH_DB, result.user.id, result.user.email);
+    }
+    if (response.ok && path === "/email-otp/change-email" && body?.newEmail) {
+      const token = sessionTokenFromCookie(request.headers.get("cookie"));
+      const userId = token ? await findSessionUser(env.AUTH_DB, token) : null;
+      if (userId) {
+        await env.AUTH_DB.prepare("DELETE FROM account WHERE userId = ? AND providerId = 'email'").bind(userId).run();
+        await ensureEmailAccount(env.AUTH_DB, userId, body.newEmail);
+      }
+    }
     if (path.startsWith("/.well-known/")) response = await cleanMetadata(response);
     if (path === "/oauth2/authorize") response = await browserRedirect(response);
     if (path === "/oauth2/get-clients") response = await attachPinnedUsers(env.AUTH_DB, response);

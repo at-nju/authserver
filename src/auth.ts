@@ -118,6 +118,71 @@ function seaTablePlugin(env: Bindings) {
   } satisfies BetterAuthPlugin;
 }
 
+
+function accountPlugin(env: Bindings) {
+  return {
+    id: "accounts",
+    endpoints: {
+      getAccounts: createAuthEndpoint(
+        "/accounts",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          const userId = (ctx.context.session as { user: { id: string } }).user.id;
+          const result = await env.AUTH_DB.prepare(
+            "SELECT providerId, accountId FROM account WHERE userId = ? ORDER BY providerId",
+          ).bind(userId).all<{ providerId: string; accountId: string }>();
+          return ctx.json(result.results);
+        },
+      ),
+      linkSeaTable: createAuthEndpoint(
+        "/accounts/link/seatable",
+        {
+          method: "POST",
+          body: z.object({ token: z.string().min(1) }),
+          use: [sessionMiddleware, formCsrfMiddleware, originCheck(() => "/console")],
+        },
+        async (ctx) => {
+          const identity = await authenticateSeaTableToken(env, ctx.body.token);
+          if (!identity) throw new APIError("UNAUTHORIZED", { message: "Invalid token" });
+          const userId = (ctx.context.session as { user: { id: string } }).user.id;
+          await resolveIdentity(ctx, env.AUTH_DB, {
+            providerId: "seatable",
+            accountId: identity.id,
+            name: identity.name,
+            email: identity.email,
+            emailVerified: identity.emailVerified,
+          }, config.providers.seatable.registration, userId);
+          return ctx.json({ success: true });
+        },
+      ),
+      unlinkAccount: createAuthEndpoint(
+        "/accounts/unlink",
+        {
+          method: "POST",
+          body: z.object({ providerId: z.string(), accountId: z.string() }),
+          use: [sessionMiddleware, formCsrfMiddleware, originCheck(() => "/console")],
+        },
+        async (ctx) => {
+          const userId = (ctx.context.session as { user: { id: string } }).user.id;
+          if (ctx.body.providerId === "email") {
+            throw new APIError("BAD_REQUEST", { message: "邮箱登录随账户邮箱管理" });
+          }
+          const count = await env.AUTH_DB.prepare(
+            "SELECT count(*) AS count FROM account WHERE userId = ?",
+          ).bind(userId).first<{ count: number }>();
+          if ((count?.count ?? 0) <= 1) {
+            throw new APIError("BAD_REQUEST", { message: "至少保留一种登录方式" });
+          }
+          await env.AUTH_DB.prepare(
+            "DELETE FROM account WHERE userId = ? AND providerId = ? AND accountId = ?",
+          ).bind(userId, ctx.body.providerId, ctx.body.accountId).run();
+          return ctx.json({ success: true });
+        },
+      ),
+    },
+  } satisfies BetterAuthPlugin;
+}
+
 export function createAuth(env: Bindings, baseURL: string) {
   return betterAuth({
     appName: config.appName,
@@ -163,6 +228,7 @@ export function createAuth(env: Bindings, baseURL: string) {
       }),
       seaTablePlugin(env),
       pinnedAccountPlugin(env),
+      accountPlugin(env),
       ...(config.providers.discourse.enabled ? [createDiscourseProvider(env, baseURL)] : []),
       ...(config.providers.upstreamOidc.enabled ? [createOidcProvider(env)] : []),
     ],
