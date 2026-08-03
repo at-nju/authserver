@@ -176,6 +176,12 @@ function oauthQuery() {
   return query.has("client_id") && query.has("sig") ? location.search.slice(1) : undefined;
 }
 
+function providerReturnTo() {
+  const signed = oauthQuery();
+  if (signed) return `/onboarding?oauth_query=${encodeURIComponent(signed)}`;
+  return new URLSearchParams(location.search).get("return_to") ?? "/console";
+}
+
 function Login() {
   const [token, setToken] = useState("");
   const [email, setEmail] = useState("");
@@ -219,8 +225,7 @@ function Login() {
     setBusy(true); setError("");
     try {
       await request("/sign-in/email-otp", { email, otp, name: email });
-      const query = new URLSearchParams(location.search);
-      location.assign(query.get("return_to") ?? "/console");
+      location.assign(providerReturnTo());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "登录失败");
       setBusy(false);
@@ -230,10 +235,9 @@ function Login() {
   async function signInOidc() {
     setBusy(true); setError("");
     try {
-      const query = new URLSearchParams(location.search);
       const result = await request<{ url: string }>("/sign-in/oauth2", {
         providerId: "upstream-oidc",
-        callbackURL: query.get("return_to") ?? "/console",
+        callbackURL: providerReturnTo(),
       });
       location.assign(result.url);
     } catch (reason) {
@@ -265,7 +269,6 @@ function Login() {
       <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
         disabled={busy}>登录</button>
     </div>
-    <ErrorText value={error} />
     <p class="mt-2 text-neutral-500 text-sm">
       还没有 Token？
       <a href="https://table.nju.edu.cn/apps/custom/authserver/"
@@ -274,7 +277,7 @@ function Login() {
     </form>}
     {(config.providers.discourse.enabled || config.providers.upstreamOidc.enabled) && <div class="mt-5 space-y-2">
       {config.providers.discourse.enabled && <a class="block w-full rounded-md border border-neutral-400 bg-neutral-100 px-3 py-2 text-center text-sm hover:bg-neutral-200"
-        href={`/sign-in/discourse?return_to=${encodeURIComponent(new URLSearchParams(location.search).get("return_to") ?? "/console")}`}>
+        href={`/sign-in/discourse?return_to=${encodeURIComponent(providerReturnTo())}`}>
         使用 Discourse 登录
       </a>}
       {config.providers.upstreamOidc.enabled && <button type="button" class="w-full rounded-md border border-neutral-400 bg-neutral-100 px-3 py-2 text-sm hover:bg-neutral-200"

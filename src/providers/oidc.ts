@@ -1,10 +1,12 @@
 import { genericOAuth } from "better-auth/plugins";
 import { config, type Env } from "../../config";
+import { registrationAllowed, type RegistrationPolicy } from "./types";
 
 export function createOidcProvider(
   env: Pick<Env, "UPSTREAM_OIDC_CLIENT_ID" | "UPSTREAM_OIDC_CLIENT_SECRET">,
 ) {
   const provider = config.providers.upstreamOidc;
+  const registration: RegistrationPolicy = provider.registration;
   return genericOAuth({
     config: [{
       providerId: "upstream-oidc",
@@ -14,11 +16,17 @@ export function createOidcProvider(
       clientSecret: env.UPSTREAM_OIDC_CLIENT_SECRET!,
       scopes: [...provider.scopes],
       disableSignUp: String(provider.registration) === "deny",
-      mapProfileToUser: (profile) => ({
-        name: provider.fields.name.map((field) => profile[field]).find(Boolean),
-        email: profile[provider.fields.email],
-        emailVerified: Boolean(profile[provider.fields.emailVerified]),
-      }),
+      mapProfileToUser: (profile) => {
+        const email = String(profile[provider.fields.email] ?? "").toLowerCase();
+        if (typeof registration === "object" && !registrationAllowed(registration, email)) {
+          throw new Error("Registration not allowed");
+        }
+        return {
+          name: provider.fields.name.map((field) => profile[field]).find(Boolean),
+          email,
+          emailVerified: Boolean(profile[provider.fields.emailVerified]),
+        };
+      },
     }],
   });
 }

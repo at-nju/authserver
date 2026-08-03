@@ -3,6 +3,7 @@ import { APIError, createAuthEndpoint } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { z } from "zod";
 import { config, type Env } from "../../config";
+import { registrationAllowed } from "./types";
 
 const encoder = new TextEncoder();
 
@@ -41,8 +42,10 @@ export function createDiscourseProvider(
         "/sign-in/discourse",
         { method: "GET", query: z.object({ return_to: z.string().optional() }) },
         async (ctx) => {
+          const returnTo = new URL(ctx.query.return_to ?? "/console", baseURL);
+          if (returnTo.origin !== baseURL) throw new APIError("BAD_REQUEST");
           const state = encode(JSON.stringify({
-            returnTo: ctx.query.return_to ?? "/console",
+            returnTo: `${returnTo.pathname}${returnTo.search}`,
             expiresAt: Date.now() + 10 * 60 * 1000,
           }));
           const nonce = `${state}.${await hmac(secret, state)}`;
@@ -77,6 +80,9 @@ export function createDiscourseProvider(
           const name = provider.fields.name.map((field) => values.get(field)).find(Boolean) ?? externalId;
           const id = `discourse:${externalId}`;
           let user = await ctx.context.internalAdapter.findUserById(id);
+          if (!user && !registrationAllowed(provider.registration, email)) {
+            throw new APIError("FORBIDDEN", { message: "不允许使用此身份注册" });
+          }
           user ??= await ctx.context.internalAdapter.createUser({
             id,
             name,
@@ -86,7 +92,7 @@ export function createDiscourseProvider(
           });
           const session = await ctx.context.internalAdapter.createSession(user!.id, false);
           await setSessionCookie(ctx, { session: session!, user: user! });
-          throw ctx.redirect(attempt.returnTo);
+          throw ctx.redirect(new URL(attempt.returnTo, baseURL).toString());
         },
       ),
     },
