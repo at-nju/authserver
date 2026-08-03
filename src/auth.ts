@@ -7,12 +7,13 @@ import { jwt } from "better-auth/plugins";
 import { z } from "zod";
 import { config, type Env } from "../config";
 import { afterLogin } from "./navigation";
-import { sharedEmail, sharedUserId } from "./pinned";
+import { sharedEmail } from "./pinned";
 import {
   authenticateSeaTableToken,
   createDiscourseProvider,
   createEmailProvider,
   createOidcProvider,
+  resolveIdentity,
 } from "./providers";
 
 export type Bindings = Env & { AUTH_DB: D1Database; ASSETS: Fetcher };
@@ -40,7 +41,10 @@ function pinnedAccountPlugin(env: Bindings) {
           if (client.userId !== owner.id) throw new APIError("UNAUTHORIZED", { message: "Not your client" });
 
           if (ctx.body.pinned) {
-            const userId = sharedUserId(client.clientId);
+            const existing = await env.AUTH_DB.prepare(
+              "SELECT pinnedUserId FROM oauthClient WHERE clientId = ?",
+            ).bind(client.clientId).first<{ pinnedUserId: string | null }>();
+            const userId = existing?.pinnedUserId ?? crypto.randomUUID();
             if (!await ctx.context.internalAdapter.findUserById(userId)) {
               await ctx.context.internalAdapter.createUser({
                 id: userId,
@@ -87,14 +91,13 @@ function seaTablePlugin(env: Bindings) {
           }
           if (!identity) throw new APIError("UNAUTHORIZED", { message: "Invalid token" });
 
-          let user = await ctx.context.internalAdapter.findUserById(identity.id);
-          user ??= await ctx.context.internalAdapter.createUser({
-            id: identity.id,
-            name: identity.id,
+          const user = await resolveIdentity(ctx, env.AUTH_DB, {
+            providerId: "seatable",
+            accountId: identity.id,
+            name: identity.name,
             email: identity.email,
             emailVerified: identity.emailVerified,
-            onboardingCompleted: false,
-          });
+          }, config.providers.seatable.registration);
           if (!user) throw new APIError("INTERNAL_SERVER_ERROR");
 
           const session = await ctx.context.internalAdapter.createSession(user.id, false);

@@ -3,7 +3,7 @@ import { APIError, createAuthEndpoint } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { z } from "zod";
 import { config, type Env } from "../../config";
-import { registrationAllowed } from "./types";
+import { resolveIdentity } from "./identity";
 
 const encoder = new TextEncoder();
 
@@ -78,31 +78,13 @@ export function createDiscourseProvider(
           const email = values.get(provider.fields.email);
           if (!externalId || !email) throw new APIError("BAD_REQUEST");
           const name = provider.fields.name.map((field) => values.get(field)).find(Boolean) ?? externalId;
-          const account = await env.AUTH_DB.prepare(
-            "SELECT userId FROM account WHERE providerId = ? AND accountId = ?",
-          ).bind("discourse", externalId).first<{ userId: string }>();
-          const existing = account ?? await env.AUTH_DB.prepare(
-            "SELECT id AS userId FROM user WHERE lower(email) = ?",
-          ).bind(email.toLowerCase()).first<{ userId: string }>();
-          let user = existing
-            ? await ctx.context.internalAdapter.findUserById(existing.userId)
-            : null;
-          if (!user && !registrationAllowed(provider.registration, email)) {
-            throw new APIError("FORBIDDEN", { message: "不允许使用此身份注册" });
-          }
-          user ??= await ctx.context.internalAdapter.createUser({
-            id: crypto.randomUUID(),
+          const user = await resolveIdentity(ctx, env.AUTH_DB, {
+            providerId: "discourse",
+            accountId: externalId,
             name,
             email: email.toLowerCase(),
             emailVerified: provider.fields.emailVerified,
-            onboardingCompleted: true,
-          });
-          if (!account) {
-            const now = new Date().toISOString();
-            await env.AUTH_DB.prepare(
-              "INSERT INTO account (id, accountId, providerId, userId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
-            ).bind(crypto.randomUUID(), externalId, "discourse", user!.id, now, now).run();
-          }
+          }, provider.registration);
           const session = await ctx.context.internalAdapter.createSession(user!.id, false);
           await setSessionCookie(ctx, { session: session!, user: user! });
           throw ctx.redirect(new URL(attempt.returnTo, baseURL).toString());
