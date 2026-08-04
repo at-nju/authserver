@@ -17,7 +17,6 @@ import {
 } from "./providers";
 
 export type Bindings = Env & { AUTH_DB: D1Database; ASSETS: Fetcher };
-export { authenticateSeaTableToken } from "./providers";
 
 function pinnedAccountPlugin(env: Bindings) {
   return {

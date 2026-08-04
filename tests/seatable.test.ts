@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { authenticateSeaTableToken } from "../src/auth";
+import { authenticateSeaTableToken } from "../src/providers/seatable";
 
 describe("SeaTable login", () => {
   it("uses a parameterized token lookup", async () => {
