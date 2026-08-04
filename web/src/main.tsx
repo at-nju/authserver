@@ -1,4 +1,4 @@
-import type { ComponentChildren } from "preact";
+import type { ComponentChildren, JSX } from "preact";
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { afterOnboarding } from "../../src/navigation";
@@ -51,6 +51,19 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
     throw new Error(String(data?.message ?? data?.error_description ?? data?.error ?? "请求失败"));
   }
   return data as T;
+}
+
+type ButtonVariant = "primary" | "secondary" | "neutral" | "danger";
+const buttonStyles: Record<ButtonVariant, string> = {
+  primary: "rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200",
+  secondary: "rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100",
+  neutral: "rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm hover:bg-neutral-200",
+  danger: "rounded-md border border-red-800 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50",
+};
+
+function Button({ variant = "secondary", class: className, ...rest }:
+  JSX.IntrinsicElements["button"] & { variant?: ButtonVariant }) {
+  return <button class={`${buttonStyles[variant]}${className ? ` ${className}` : ""}`} {...rest} />;
 }
 
 function Layout({ title, children, wide = false }: {
@@ -149,13 +162,8 @@ function EmailVerificationModal({ email, otp, busy, error, onOtpInput, onClose, 
           onInput={(event) => onOtpInput(event.currentTarget.value)} />
         <ErrorText value={error} />
         <div class="mt-5 flex justify-end gap-2">
-          <button type="button"
-            class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
-            onClick={onClose}>取消</button>
-          <button type="submit"
-            class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
-            确认
-          </button>
+          <Button onClick={onClose}>取消</Button>
+          <Button type="submit" variant="primary">确认</Button>
         </div>
       </fieldset>
     </form>
@@ -243,8 +251,7 @@ function Login() {
         {emailSent && <input class="w-28" required inputMode="numeric" autocomplete="one-time-code"
           maxLength={6} placeholder="验证码" value={otp}
           onInput={(event) => setOtp(event.currentTarget.value)} />}
-        <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
-          disabled={busy}>{emailSent ? "登录" : "发送验证码"}</button>
+        <Button variant="neutral" class="shrink-0" disabled={busy}>{emailSent ? "登录" : "发送验证码"}</Button>
       </div>
     </form>}
     {config.providers.seatable.enabled && <form onSubmit={submit}>
@@ -253,8 +260,7 @@ function Login() {
       <input id="token_field" class="w-full rounded-md border border-neutral-400 p-1"
         required type="password" autocomplete="off" autofocus value={token}
         onInput={(event) => setToken(event.currentTarget.value)} />
-      <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
-        disabled={busy}>登录</button>
+      <Button variant="neutral" class="shrink-0" disabled={busy}>登录</Button>
     </div>
     <p class="mt-2 text-neutral-500 text-sm">
       还没有 Token？
@@ -352,13 +358,8 @@ function Onboarding() {
         </div>
         <ErrorText value={error} />
         <div class="flex justify-end gap-2 pt-1">
-          <button type="button"
-            class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
-            onClick={() => finish(true)}>跳过</button>
-          <button type="submit"
-            class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
-            完成
-          </button>
+          <Button onClick={() => finish(true)}>跳过</Button>
+          <Button type="submit" variant="primary">完成</Button>
         </div>
       </fieldset>
     </form>
@@ -705,8 +706,7 @@ function Console() {
             <div class="mt-1 flex items-center justify-between gap-2">
               <input id="name_field" class="w-full" value={name}
                 onInput={(event) => setName(event.currentTarget.value)} />
-              <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
-                onClick={saveName}>保存昵称</button>
+              <Button variant="neutral" class="shrink-0" onClick={saveName}>保存昵称</Button>
             </div>
           </div>
           <div>
@@ -714,8 +714,7 @@ function Console() {
             <div class="mt-1 flex items-center justify-between gap-2">
               <input id="email_field" class="w-full" type="email" value={email} disabled={emailBusy}
                 onInput={(event) => setEmail(event.currentTarget.value)} />
-              <button class="shrink-0 px-3 py-1.5 rounded-md border border-neutral-400 bg-neutral-100 hover:bg-neutral-200 text-sm"
-                onClick={requestEmailChange} disabled={emailBusy}>修改邮箱</button>
+              <Button variant="neutral" class="shrink-0" onClick={requestEmailChange} disabled={emailBusy}>修改邮箱</Button>
             </div>
             <small class="text-sm text-neutral-400">
               {session.user.emailVerified ? "已验证" : "未验证"}</small>
@@ -739,7 +738,7 @@ function Console() {
           <form class="mt-3 flex gap-2" onSubmit={linkSeaTable}>
             <input class="min-w-0 flex-1" type="password" required placeholder="SeaTable Token"
               value={linkToken} onInput={(event) => setLinkToken(event.currentTarget.value)} />
-            <button class="rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm">绑定</button>
+            <Button variant="neutral">绑定</Button>
           </form>}
         <div class="mt-3 flex flex-wrap gap-2">
           {config.providers.discourse.enabled && !accounts.some((account) => account.providerId === "discourse") &&
@@ -754,17 +753,15 @@ function Console() {
             <strong class="text-sm text-red-900">注销账户</strong>
             <p class="mt-1 text-xs text-red-800">永久删除账户、登录方式、会话、OIDC 应用和授权记录。</p>
           </div>
-          <button type="button" class="shrink-0 rounded-md border border-red-700 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-100"
-            onClick={() => { setDeleteAccountConfirmation(""); setDeleteAccountOpen(true); }}>注销账户</button>
+          <Button variant="danger" class="shrink-0"
+            onClick={() => { setDeleteAccountConfirmation(""); setDeleteAccountOpen(true); }}>注销账户</Button>
         </div>
       </section>
 
       <section class="mt-6">
         <header class="mb-5 flex items-center justify-between gap-4">
           <h2 class="font-semibold text-2xl text-neutral-950">OIDC 应用</h2>
-          <button type="button"
-            class="shrink-0 rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm hover:bg-neutral-200"
-            onClick={openCreateClient}>创建应用</button>
+          <Button variant="neutral" class="shrink-0" onClick={openCreateClient}>创建应用</Button>
         </header>
 
         {clients.length ? <div class="space-y-4">
@@ -800,21 +797,18 @@ function Console() {
                   </dl>
                 </div>
                 <div class="flex shrink-0 flex-wrap gap-2">
-                  <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
-                    onClick={() => openEditClient(client)}>编辑</button>
-                  {confidential && <button type="button"
-                    class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
+                  <Button onClick={() => openEditClient(client)}>编辑</Button>
+                  {confidential && <Button
                     onClick={() => {
                       setClientDialogError("");
                       setClientConfirmation({ action: "rotate", client });
-                    }}>轮换密钥</button>}
-                  <button type="button"
-                    class="rounded-md border border-red-700 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
+                    }}>轮换密钥</Button>}
+                  <Button variant="danger"
                     onClick={() => {
                       setDeleteConfirmation("");
                       setClientDialogError("");
                       setClientConfirmation({ action: "delete", client });
-                    }}>删除</button>
+                    }}>删除</Button>
                 </div>
               </div>
             </article>;
@@ -822,9 +816,7 @@ function Console() {
         </div> : <div class="rounded-xl border border-dashed border-neutral-400 px-5 py-10 text-center">
           <h3 class="font-semibold text-neutral-950">还没有 OIDC 应用</h3>
           <p class="mt-1 text-sm text-neutral-700">创建一个应用以接入 OIDC 登录</p>
-          <button type="button"
-            class="mt-4 rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
-            onClick={openCreateClient}>创建第一个应用</button>
+          <Button variant="primary" class="mt-4" onClick={openCreateClient}>创建第一个应用</Button>
         </div>}
       </section>
     </div>
@@ -836,10 +828,9 @@ function Console() {
       <input id="delete_account_confirmation" autofocus class="w-full" value={deleteAccountConfirmation}
         disabled={deleteAccountBusy} onInput={(event) => setDeleteAccountConfirmation(event.currentTarget.value)} />
       <div class="mt-5 flex justify-end gap-2">
-        <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm"
-          disabled={deleteAccountBusy} onClick={() => setDeleteAccountOpen(false)}>取消</button>
-        <button type="button" class="rounded-md border border-red-800 bg-white px-3 py-1.5 text-sm text-red-800"
-          disabled={deleteAccountBusy || deleteAccountConfirmation !== "DELETE"} onClick={deleteAccount}>永久删除</button>
+        <Button disabled={deleteAccountBusy} onClick={() => setDeleteAccountOpen(false)}>取消</Button>
+        <Button variant="danger"
+          disabled={deleteAccountBusy || deleteAccountConfirmation !== "DELETE"} onClick={deleteAccount}>永久删除</Button>
       </div>
     </Modal>}
 
@@ -904,12 +895,8 @@ function Console() {
           </div>
           <ErrorText value={clientDialogError} />
           <div class="flex justify-end gap-2">
-            <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
-              onClick={() => setClientDialog(null)}>取消</button>
-            <button type="submit"
-              class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
-              {clientDialog.mode === "create" ? "创建" : "保存"}
-            </button>
+            <Button onClick={() => setClientDialog(null)}>取消</Button>
+            <Button type="submit" variant="primary">{clientDialog.mode === "create" ? "创建" : "保存"}</Button>
           </div>
         </fieldset>
       </form>
@@ -923,10 +910,8 @@ function Console() {
       </p>
       <ErrorText value={clientDialogError} />
       <fieldset disabled={clientBusy} class="mt-5 flex justify-end gap-2">
-        <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
-          onClick={() => setClientConfirmation(null)}>取消</button>
-        <button type="button" class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
-          onClick={rotateClient}>轮换密钥</button>
+        <Button onClick={() => setClientConfirmation(null)}>取消</Button>
+        <Button variant="primary" onClick={rotateClient}>轮换密钥</Button>
       </fieldset>
     </Modal>}
 
@@ -944,11 +929,9 @@ function Console() {
         disabled={clientBusy} onInput={(event) => setDeleteConfirmation(event.currentTarget.value)} />
       <ErrorText value={clientDialogError} />
       <fieldset disabled={clientBusy} class="mt-5 flex justify-end gap-2 border-t border-neutral-200 pt-4">
-        <button type="button" class="rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-100"
-          onClick={() => setClientConfirmation(null)}>取消</button>
-        <button type="button" disabled={deleteConfirmation !== clientNameOrId(clientConfirmation.client)}
-          class="rounded-md border border-red-800 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50"
-          onClick={removeClient}>删除应用</button>
+        <Button class="font-medium text-neutral-950" onClick={() => setClientConfirmation(null)}>取消</Button>
+        <Button variant="danger" disabled={deleteConfirmation !== clientNameOrId(clientConfirmation.client)}
+          onClick={removeClient}>删除应用</Button>
       </fieldset>
     </Modal>}
 
@@ -989,9 +972,8 @@ function Console() {
         <span>我已将客户端密钥保存到安全的位置</span>
       </label>}
       <div class="mt-5 flex justify-end pt-2">
-        <button type="button" disabled={Boolean(clientResult.secret && !secretSaved)}
-          class="rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
-          onClick={() => setClientResult(null)}>关闭</button>
+        <Button variant="primary" disabled={Boolean(clientResult.secret && !secretSaved)}
+          onClick={() => setClientResult(null)}>关闭</Button>
       </div>
     </Modal>}
   </Layout>;
