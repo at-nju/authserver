@@ -20,6 +20,28 @@ async function hmac(secret: string, value: string) {
     .join("");
 }
 
+async function buildSsoUrl(
+  secret: string,
+  baseURL: string,
+  providerOrigin: string,
+  returnToPath: string,
+  linkUserId?: string,
+): Promise<string> {
+  const state = btoa(JSON.stringify({
+    returnTo: returnToPath,
+    expiresAt: Date.now() + 10 * 60 * 1000,
+    ...(linkUserId ? { linkUserId } : {}),
+  }));
+  const nonce = `${state}.${await hmac(secret, state)}`;
+  const sso = btoa(new URLSearchParams({
+    nonce,
+    return_sso_url: `${baseURL}/sign-in/discourse/callback`,
+  }).toString());
+  const target = new URL("/session/sso_provider", providerOrigin);
+  target.search = new URLSearchParams({ sso, sig: await hmac(secret, sso) }).toString();
+  return target.toString();
+}
+
 export function createDiscourseProvider(
   env: Pick<Env, "DISCOURSE_CONNECT_SECRET"> & { AUTH_DB: D1Database },
   baseURL: string,
@@ -36,18 +58,9 @@ export function createDiscourseProvider(
         async (ctx) => {
           const returnTo = new URL(ctx.query.return_to ?? "/console", baseURL);
           if (returnTo.origin !== baseURL) throw new APIError("BAD_REQUEST");
-          const state = btoa(JSON.stringify({
-            returnTo: `${returnTo.pathname}${returnTo.search}`,
-            expiresAt: Date.now() + 10 * 60 * 1000,
-          }));
-          const nonce = `${state}.${await hmac(secret, state)}`;
-          const sso = btoa(new URLSearchParams({
-            nonce,
-            return_sso_url: `${baseURL}/sign-in/discourse/callback`,
-          }).toString());
-          const target = new URL("/session/sso_provider", provider.origin);
-          target.search = new URLSearchParams({ sso, sig: await hmac(secret, sso) }).toString();
-          throw ctx.redirect(target.toString());
+          throw ctx.redirect(await buildSsoUrl(
+            secret, baseURL, provider.origin, `${returnTo.pathname}${returnTo.search}`,
+          ));
         },
       ),
       linkDiscourse: createAuthEndpoint(
@@ -57,19 +70,9 @@ export function createDiscourseProvider(
           const returnTo = new URL(ctx.query.return_to ?? "/console", baseURL);
           if (returnTo.origin !== baseURL) throw new APIError("BAD_REQUEST");
           const userId = (ctx.context.session as { user: { id: string } }).user.id;
-          const state = btoa(JSON.stringify({
-            returnTo: `${returnTo.pathname}${returnTo.search}`,
-            expiresAt: Date.now() + 10 * 60 * 1000,
-            linkUserId: userId,
-          }));
-          const nonce = `${state}.${await hmac(secret, state)}`;
-          const sso = btoa(new URLSearchParams({
-            nonce,
-            return_sso_url: `${baseURL}/sign-in/discourse/callback`,
-          }).toString());
-          const target = new URL("/session/sso_provider", provider.origin);
-          target.search = new URLSearchParams({ sso, sig: await hmac(secret, sso) }).toString();
-          throw ctx.redirect(target.toString());
+          throw ctx.redirect(await buildSsoUrl(
+            secret, baseURL, provider.origin, `${returnTo.pathname}${returnTo.search}`, userId,
+          ));
         },
       ),
       discourseCallback: createAuthEndpoint(
