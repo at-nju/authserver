@@ -4,10 +4,6 @@ export const SESSION_COOKIE = "better-auth.session_token";
 export const SECURE_SESSION_COOKIE = "__Secure-better-auth.session_token";
 const SESSION_TTL_MS = config.auth.sessionTtlSeconds * 1000;
 
-export function sharedUserId(clientId: string): string {
-  return `svc_${clientId}`;
-}
-
 export function sharedEmail(clientId: string): string {
   return `service.${clientId.toLowerCase()}@nju.at`;
 }
