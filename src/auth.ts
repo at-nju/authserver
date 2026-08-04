@@ -12,7 +12,6 @@ import {
   authenticateSeaTableToken,
   createDiscourseProvider,
   createEmailProvider,
-  createOidcProvider,
   resolveIdentity,
 } from "./providers";
 
@@ -242,7 +241,6 @@ export function createAuth(env: Bindings, baseURL: string) {
       pinnedAccountPlugin(env),
       accountPlugin(env),
       ...(config.providers.discourse.enabled ? [createDiscourseProvider(env, baseURL)] : []),
-      ...(config.providers.upstreamOidc.enabled ? [createOidcProvider(env)] : []),
     ],
   });
 }

@@ -3,8 +3,6 @@ export type Env = {
   SEATABLE_API_TOKEN: string;
   SMTP_PASSWORD: string;
   DISCOURSE_CONNECT_SECRET?: string;
-  UPSTREAM_OIDC_CLIENT_ID?: string;
-  UPSTREAM_OIDC_CLIENT_SECRET?: string;
 };
 
 export const config = {
@@ -69,18 +67,6 @@ export const config = {
         name: ["name", "username"],
         email: "email",
         emailVerified: true,
-      },
-    },
-    upstreamOidc: {
-      enabled: false,
-      registration: "allow",
-      issuer: "https://id.example.com",
-      scopes: ["openid", "profile", "email"],
-      fields: {
-        subject: "sub",
-        name: ["name", "preferred_username"],
-        email: "email",
-        emailVerified: "email_verified",
       },
     },
   },
