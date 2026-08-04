@@ -1,13 +1,9 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { resolveIdentity } from "../src/providers/identity";
+import { testDatabase } from "./helpers";
 
 function database() {
-  const sqlite = new DatabaseSync(":memory:");
-  for (const file of readdirSync("migrations").filter((name) => name.endsWith(".sql")).sort()) {
-    sqlite.exec(readFileSync(`migrations/${file}`, "utf8"));
-  }
+  const sqlite = testDatabase();
   const db = {
     prepare(sql: string) {
       const statement = sqlite.prepare(sql);

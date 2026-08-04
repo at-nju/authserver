@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuth, type Bindings } from "../src/auth";
+import { testDatabase } from "./helpers";
 
 const { mailSend } = vi.hoisted(() => ({ mailSend: vi.fn() }));
 vi.mock("worker-mailer", () => ({ WorkerMailer: { send: mailSend } }));
@@ -14,10 +13,7 @@ afterEach(() => {
 
 describe("authentication flow", () => {
   it("creates the default profile, session, and an OIDC client", async () => {
-    const db = new DatabaseSync(":memory:");
-    for (const file of readdirSync("migrations").filter((name) => name.endsWith(".sql")).sort()) {
-      db.exec(readFileSync(`migrations/${file}`, "utf8"));
-    }
+    const db = testDatabase();
     const env = {
       AUTH_DB: db as unknown as D1Database,
       ASSETS: {} as Fetcher,
