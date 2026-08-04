@@ -12,14 +12,6 @@ export function sharedEmail(clientId: string): string {
   return `service.${clientId.toLowerCase()}@nju.at`;
 }
 
-function randomToken(): string {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  let token = "";
-  for (const byte of bytes) token += alphabet[byte % alphabet.length];
-  return token;
-}
-
 async function signSessionToken(secret: string, token: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -94,7 +86,7 @@ async function findSharedSession(db: D1Database, userId: string): Promise<{ id: 
 
 async function createSharedSession(db: D1Database, userId: string): Promise<{ id: string; token: string }> {
   const now = new Date();
-  const session = { id: randomToken(), token: randomToken() };
+  const session = { id: crypto.randomUUID(), token: crypto.randomUUID() };
   await db.prepare(
     "INSERT INTO session (id, expiresAt, token, createdAt, updatedAt, userId) VALUES (?, ?, ?, ?, ?, ?)",
   ).bind(
