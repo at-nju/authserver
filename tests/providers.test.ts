@@ -15,7 +15,6 @@ describe("provider configuration", () => {
       "seatable",
       "email",
       "discourse",
-      "upstreamOidc",
     ]);
   });
 

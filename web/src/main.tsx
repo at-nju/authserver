@@ -233,20 +233,6 @@ function Login() {
     }
   }
 
-  async function signInOidc() {
-    setBusy(true); setError("");
-    try {
-      const result = await request<{ url: string }>("/sign-in/oauth2", {
-        providerId: "upstream-oidc",
-        callbackURL: providerReturnTo(),
-      });
-      location.assign(result.url);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "登录失败");
-      setBusy(false);
-    }
-  }
-
   return <Layout title="登录">
     {config.providers.email.enabled && <form class="mb-5" onSubmit={emailSent ? signInEmail : sendEmailOtp}>
       <label class="text-sm" htmlFor="email_login_field">南京大学邮箱</label>
@@ -276,13 +262,11 @@ function Login() {
         target="_blank" rel="noopener noreferrer">点击此处获取</a>
     </p>
     </form>}
-    {(config.providers.discourse.enabled || config.providers.upstreamOidc.enabled) && <div class="mt-5 space-y-2">
-      {config.providers.discourse.enabled && <a class="block w-full rounded-md border border-neutral-400 bg-neutral-100 px-3 py-2 text-center text-sm hover:bg-neutral-200"
+    {config.providers.discourse.enabled && <div class="mt-5 space-y-2">
+      <a class="block w-full rounded-md border border-neutral-400 bg-neutral-100 px-3 py-2 text-center text-sm hover:bg-neutral-200"
         href={`/sign-in/discourse?return_to=${encodeURIComponent(providerReturnTo())}`}>
         使用 Discourse 登录
-      </a>}
-      {config.providers.upstreamOidc.enabled && <button type="button" class="w-full rounded-md border border-neutral-400 bg-neutral-100 px-3 py-2 text-sm hover:bg-neutral-200"
-        disabled={busy} onClick={signInOidc}>使用 OIDC 登录</button>}
+      </a>
     </div>}
     <ErrorText value={error} />
   </Layout>;
@@ -505,14 +489,6 @@ function Console() {
       setLinkToken("");
       await reloadAccounts();
     }
-  }
-
-  async function linkOidc() {
-    const result = await request<{ url: string }>("/oauth2/link", {
-      providerId: "upstream-oidc",
-      callbackURL: "/console",
-    });
-    location.assign(result.url);
   }
 
   async function unlinkAccount(account: Account) {
@@ -769,9 +745,6 @@ function Console() {
           {config.providers.discourse.enabled && !accounts.some((account) => account.providerId === "discourse") &&
             <a class="rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm"
               href="/accounts/link/discourse?return_to=%2Fconsole">绑定 Discourse</a>}
-          {config.providers.upstreamOidc.enabled && !accounts.some((account) => account.providerId === "upstream-oidc") &&
-            <button type="button" class="rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm"
-              onClick={linkOidc}>绑定 OIDC</button>}
         </div>
       </section>
       <section class="mt-8 border-t border-red-200 pt-6">
