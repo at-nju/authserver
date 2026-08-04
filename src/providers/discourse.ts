@@ -20,14 +20,6 @@ async function hmac(secret: string, value: string) {
     .join("");
 }
 
-function encode(value: string) {
-  return btoa(value);
-}
-
-function decode(value: string) {
-  return atob(value);
-}
-
 export function createDiscourseProvider(
   env: Pick<Env, "DISCOURSE_CONNECT_SECRET"> & { AUTH_DB: D1Database },
   baseURL: string,
@@ -44,12 +36,12 @@ export function createDiscourseProvider(
         async (ctx) => {
           const returnTo = new URL(ctx.query.return_to ?? "/console", baseURL);
           if (returnTo.origin !== baseURL) throw new APIError("BAD_REQUEST");
-          const state = encode(JSON.stringify({
+          const state = btoa(JSON.stringify({
             returnTo: `${returnTo.pathname}${returnTo.search}`,
             expiresAt: Date.now() + 10 * 60 * 1000,
           }));
           const nonce = `${state}.${await hmac(secret, state)}`;
-          const sso = encode(new URLSearchParams({
+          const sso = btoa(new URLSearchParams({
             nonce,
             return_sso_url: `${baseURL}/sign-in/discourse/callback`,
           }).toString());
@@ -65,13 +57,13 @@ export function createDiscourseProvider(
           const returnTo = new URL(ctx.query.return_to ?? "/console", baseURL);
           if (returnTo.origin !== baseURL) throw new APIError("BAD_REQUEST");
           const userId = (ctx.context.session as { user: { id: string } }).user.id;
-          const state = encode(JSON.stringify({
+          const state = btoa(JSON.stringify({
             returnTo: `${returnTo.pathname}${returnTo.search}`,
             expiresAt: Date.now() + 10 * 60 * 1000,
             linkUserId: userId,
           }));
           const nonce = `${state}.${await hmac(secret, state)}`;
-          const sso = encode(new URLSearchParams({
+          const sso = btoa(new URLSearchParams({
             nonce,
             return_sso_url: `${baseURL}/sign-in/discourse/callback`,
           }).toString());
@@ -88,12 +80,12 @@ export function createDiscourseProvider(
             throw new APIError("UNAUTHORIZED");
           }
 
-          const values = new URLSearchParams(decode(ctx.query.sso));
+          const values = new URLSearchParams(atob(ctx.query.sso));
           const [state, signature] = (values.get("nonce") ?? "").split(".");
           if (!state || await hmac(secret, state) !== signature) {
             throw new APIError("UNAUTHORIZED");
           }
-          const attempt = JSON.parse(decode(state)) as {
+          const attempt = JSON.parse(atob(state)) as {
             returnTo: string;
             expiresAt: number;
             linkUserId?: string;
