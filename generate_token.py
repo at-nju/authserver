@@ -12,14 +12,6 @@ def clean(value):
     return str(value or "").strip()
 
 
-def new_token(used):
-    while True:
-        t = secrets.token_urlsafe(TOKEN_LEN)
-        if t not in used:
-            used.add(t)
-            return t
-
-
 def main():
     base = Base(context.api_token, context.server_url)
     base.auth()
