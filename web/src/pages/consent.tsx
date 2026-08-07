@@ -35,18 +35,26 @@ export default function Consent() {
 
   return <Layout title="授权确认">
     {client ? <>
-      <p class="text-sm text-neutral-700">
-        应用 <strong class="text-neutral-950">{client.client_name ?? client.client_id}</strong> 请求访问以下权限：
-      </p>
-      <ul class="mt-4 divide-y divide-neutral-200 rounded-lg border border-neutral-300 bg-neutral-50">
+      <div class="flex items-start gap-3">
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-stone-100 font-mono text-base font-bold text-stone-700">
+          {(client.client_name?.trim() || client.client_id).charAt(0)}
+        </span>
+        <div class="min-w-0">
+          <p class="text-xs font-medium uppercase tracking-wide text-stone-400">应用请求访问以下权限</p>
+          <strong class="mt-0.5 block text-lg font-semibold tracking-tight text-stone-950">
+            {client.client_name ?? client.client_id}
+          </strong>
+        </div>
+      </div>
+      <ul class="mt-5 divide-y divide-stone-100 overflow-hidden rounded-xl border border-stone-200">
         {(params.get("scope") ?? "").split(" ").filter(Boolean)
-          .map((scope) => <li key={scope} class="px-4 py-2.5 font-mono text-sm text-neutral-900">{scope}</li>)}
+          .map((scope) => <li key={scope} class="px-4 py-3 font-mono text-sm text-stone-900">{scope}</li>)}
       </ul>
       <div class="mt-6 flex justify-end gap-2">
         <Button onClick={() => decide(false)}>拒绝</Button>
         <Button variant="primary" onClick={() => decide(true)}>允许</Button>
       </div>
-    </> : !error && <p class="text-sm text-neutral-500">加载中</p>}
+    </> : !error && <p class="py-10 text-center text-sm text-stone-400">加载中</p>}
     <ErrorText value={error} />
   </Layout>;
 }
