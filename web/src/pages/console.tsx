@@ -34,10 +34,7 @@ export default function Console() {
           class={tabButtonClass(tab === "oidc")}
           onClick={() => { location.hash = "oidc"; }}>OIDC 应用</button>
       </div>
-      <div class="flex items-center gap-3 text-sm">
-        <span class="text-neutral-400">ID {session.user.id}</span>
-        <button class="text-blue-500 hover:text-blue-700" onClick={logout}>退出</button>
-      </div>
+      <button class="text-blue-500 hover:text-blue-700" onClick={logout}>退出</button>
     </div>
     {tab === "profile"
       ? <ProfileTab session={session} onChanged={() => setRevision((value) => value + 1)} />
