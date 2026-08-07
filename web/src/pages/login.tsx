@@ -3,13 +3,21 @@ import { config } from "../../../config";
 import { oauthQuery, providerReturnTo, request } from "../api";
 import { Button, ErrorText, Layout } from "../components";
 
+type LoginMethod = "token" | "email";
+
 export default function Login() {
+  const [method, setMethod] = useState<LoginMethod>("token");
   const [token, setToken] = useState("");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const emailEnabled = config.providers.email.enabled;
+  const tokenEnabled = config.providers.seatable.enabled;
+  const showTabs = emailEnabled && tokenEnabled;
+  const active = showTabs ? method : emailEnabled ? "email" : "token";
 
   async function submit(event: Event) {
     event.preventDefault();
@@ -53,12 +61,24 @@ export default function Login() {
     }
   }
 
+  function switchMethod(next: LoginMethod) {
+    setMethod(next);
+    setError("");
+  }
+
   return <Layout title="登录">
-    {config.providers.email.enabled && <form class="mb-5" onSubmit={emailSent ? signInEmail : sendEmailOtp}>
+    {showTabs && <div class="mb-5 flex gap-1 rounded-lg border border-neutral-300 bg-neutral-200/60 p-1"
+      role="tablist" aria-label="登录方式">
+      <button type="button" role="tab" aria-selected={active === "token"} class={tabClass(active === "token")}
+        onClick={() => switchMethod("token")}>Token 登录</button>
+      <button type="button" role="tab" aria-selected={active === "email"} class={tabClass(active === "email")}
+        onClick={() => switchMethod("email")}>邮箱登录</button>
+    </div>}
+    {active === "email" && emailEnabled && <form onSubmit={emailSent ? signInEmail : sendEmailOtp}>
       <label class="text-sm" htmlFor="email_login_field">南京大学邮箱</label>
       <div class="flex items-center justify-between gap-2">
         <input id="email_login_field" class="w-full" required type="email" autocomplete="email"
-          value={email} disabled={emailSent}
+          value={email} disabled={emailSent} autofocus
           onInput={(event) => setEmail(event.currentTarget.value)} />
         {emailSent && <input class="w-28" required inputMode="numeric" autocomplete="one-time-code"
           maxLength={6} placeholder="验证码" value={otp}
@@ -66,26 +86,38 @@ export default function Login() {
         <Button variant="neutral" class="shrink-0" disabled={busy}>{emailSent ? "登录" : "发送验证码"}</Button>
       </div>
     </form>}
-    {config.providers.seatable.enabled && <form onSubmit={submit}>
-    <label class="text-sm" htmlFor="token_field">Token</label>
-    <div class="flex items-center justify-between gap-2">
-      <input id="token_field" class="w-full rounded-md border border-neutral-400 p-1"
-        required type="password" autocomplete="off" autofocus value={token}
-        onInput={(event) => setToken(event.currentTarget.value)} />
-      <Button variant="neutral" class="shrink-0" disabled={busy}>登录</Button>
-    </div>
-    <p class="mt-2 text-neutral-500 text-sm">
-      还没有 Token？
-      <a href="https://table.nju.edu.cn/apps/custom/authserver/"
-        target="_blank" rel="noopener noreferrer">点击此处获取</a>
-    </p>
+    {active === "token" && tokenEnabled && <form onSubmit={submit}>
+      <label class="text-sm" htmlFor="token_field">Token</label>
+      <div class="flex items-center justify-between gap-2">
+        <input id="token_field" class="w-full rounded-md border border-neutral-400 p-1"
+          required type="password" autocomplete="off" autofocus value={token}
+          onInput={(event) => setToken(event.currentTarget.value)} />
+        <Button variant="neutral" class="shrink-0" disabled={busy}>登录</Button>
+      </div>
+      <p class="mt-2 text-neutral-500 text-sm">
+        还没有 Token？
+        <a href="https://table.nju.edu.cn/apps/custom/authserver/"
+          target="_blank" rel="noopener noreferrer">点击此处获取</a>
+      </p>
     </form>}
-    {config.providers.discourse.enabled && <div class="mt-5 space-y-2">
+    <ErrorText value={error} />
+    {config.providers.discourse.enabled && <div class="mt-6">
+      <div class="mb-3 flex items-center gap-3 text-xs text-neutral-400">
+        <span>其他认证方式</span>
+        <span class="h-px flex-1 bg-neutral-200"></span>
+      </div>
       <a class="block w-full rounded-md border border-neutral-400 bg-neutral-100 px-3 py-2 text-center text-sm hover:bg-neutral-200"
         href={`/sign-in/discourse?return_to=${encodeURIComponent(providerReturnTo())}`}>
         使用 Discourse 登录
       </a>
     </div>}
-    <ErrorText value={error} />
   </Layout>;
+}
+
+function tabClass(active: boolean) {
+  return `flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+    active
+      ? "border border-neutral-300 bg-white text-neutral-950 shadow-sm"
+      : "border border-transparent text-neutral-600 hover:text-neutral-950"
+  }`;
 }
