@@ -1,6 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
 import { request, useSession } from "../api";
-import { tabButtonClass } from "../components";
 import { OidcTab } from "./console/oidc";
 import { ProfileTab } from "./console/profile";
 
@@ -30,17 +29,20 @@ export default function Console() {
   return <div class="min-h-[100dvh]">
     <header class="sticky top-0 z-40 border-b border-stone-200/70 bg-white/85 backdrop-blur">
       <div class="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-4">
-        <div class="flex min-w-0 items-center gap-5">
-          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent text-xs font-bold text-white">N</span>
-          <div class="flex gap-1 rounded-lg border border-stone-200 bg-stone-100 p-1"
-            role="tablist" aria-label="控制台">
+        <div class="flex min-w-0 items-center gap-6">
+          <span class="whitespace-nowrap text-sm font-semibold tracking-tight text-stone-900">{__APP_NAME__}</span>
+          <nav class="flex h-14 items-stretch gap-1" role="tablist" aria-label="控制台">
             <button type="button" role="tab" aria-selected={tab === "profile"}
-              class={tabButtonClass(tab === "profile")}
+              class={`flex items-center border-b-2 px-3 text-sm font-medium transition-colors ${tab === "profile"
+                ? "border-accent text-stone-950"
+                : "border-transparent text-stone-500 hover:text-stone-800"}`}
               onClick={() => { location.hash = "profile"; }}>资料</button>
             <button type="button" role="tab" aria-selected={tab === "oidc"}
-              class={tabButtonClass(tab === "oidc")}
+              class={`flex items-center border-b-2 px-3 text-sm font-medium transition-colors ${tab === "oidc"
+                ? "border-accent text-stone-950"
+                : "border-transparent text-stone-500 hover:text-stone-800"}`}
               onClick={() => { location.hash = "oidc"; }}>OIDC 应用</button>
-          </div>
+          </nav>
         </div>
         <button class="text-sm text-stone-500 transition-colors hover:text-stone-900"
           onClick={logout}>退出</button>

@@ -67,7 +67,7 @@ export default function Login() {
   }
 
   return <Layout title="登录">
-    {showTabs && <div class="mb-6 flex gap-1 rounded-lg border border-stone-200 bg-stone-100 p-1"
+    {showTabs && <div class="mb-6 flex gap-4 border-b border-stone-200"
       role="tablist" aria-label="登录方式">
       <button type="button" role="tab" aria-selected={active === "token"} class={tabButtonClass(active === "token")}
         onClick={() => switchMethod("token")}>Token 登录</button>

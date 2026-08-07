@@ -15,10 +15,10 @@ export function Button({ variant = "secondary", class: className, ...rest }:
 }
 
 export function tabButtonClass(active: boolean) {
-  return `flex-1 whitespace-nowrap rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+  return `-mb-px whitespace-nowrap border-b-2 px-1 pb-2 pt-1 text-sm font-medium transition-colors ${
     active
-      ? "bg-white text-stone-950 shadow-sm"
-      : "text-stone-600 hover:text-stone-950"
+      ? "border-accent text-stone-950"
+      : "border-transparent text-stone-500 hover:border-stone-300 hover:text-stone-800"
   }`;
 }
 
