@@ -65,21 +65,21 @@ export default function Onboarding() {
     setVerificationError("");
   }
 
-  if (!session) return <Layout title="首次设置"><p>加载中</p></Layout>;
+  if (!session) return <Layout title="首次设置"><p class="text-sm text-stone-400">加载中</p></Layout>;
   return <Layout title="首次设置">
-    <p class="mb-5 text-sm text-neutral-700">可以使用默认资料，也可以现在修改</p>
+    <p class="mb-5 text-sm text-stone-500">可以使用默认资料，也可以现在修改</p>
     <form onSubmit={(event) => { event.preventDefault(); finish(); }}>
       <fieldset disabled={busy} class="space-y-4">
         <div>
-          <label htmlFor="onboarding_name_field" class="mb-1 block text-sm">姓名</label>
+          <label htmlFor="onboarding_name_field" class="mb-1.5 block text-sm font-medium text-stone-700">姓名</label>
           <input id="onboarding_name_field" autofocus class="w-full" value={name}
             onInput={(event) => setName(event.currentTarget.value)} />
         </div>
         <div>
-          <label htmlFor="onboarding_email_field" class="mb-1 block text-sm">邮箱</label>
+          <label htmlFor="onboarding_email_field" class="mb-1.5 block text-sm font-medium text-stone-700">邮箱</label>
           <input id="onboarding_email_field" required class="w-full" type="email" value={email}
             onInput={(event) => setEmail(event.currentTarget.value)} />
-          <p class="mt-1 text-xs text-neutral-500">修改邮箱后需要输入验证码</p>
+          <p class="mt-1.5 text-xs text-stone-400">修改邮箱后需要输入验证码</p>
         </div>
         <ErrorText value={error} />
         <div class="flex justify-end gap-2 pt-1">
