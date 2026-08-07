@@ -269,13 +269,13 @@ export function OidcTab() {
           <div>
             <label htmlFor="redirect_uris_field" class="mb-1.5 block text-sm">回调地址</label>
             <textarea id="redirect_uris_field" required rows={6}
-              class="w-full resize-y rounded-md border border-neutral-400 px-2 py-1.5 font-mono text-sm text-neutral-950"
+              class="w-full resize-y border-stone-300 px-2 py-1.5 font-mono text-sm text-neutral-950"
               placeholder={'https://example.com/callback\nhttp://localhost:3000/callback'} value={redirectUris}
               onInput={(event) => setRedirectUris(event.currentTarget.value)} />
             <p class="mt-1.5 text-xs text-neutral-700">每行填写一个完整的 HTTP 或 HTTPS 地址</p>
           </div>
 
-          <div class="rounded-md border border-neutral-400 bg-neutral-50 p-3">
+          <div class="rounded-lg border border-stone-300 bg-stone-50 p-3">
             <label class="flex cursor-pointer items-center gap-2 text-sm text-neutral-950">
               <input type="checkbox" class="mt-0.5 h-4 w-4 p-0" checked={clientPinned}
                 onChange={(event) => setClientPinned(event.currentTarget.checked)} />
@@ -300,7 +300,7 @@ export function OidcTab() {
     {clientConfirmation?.action === "rotate" && <Modal title="轮换客户端密钥"
       dismissDisabled={clientBusy} onClose={() => setClientConfirmation(null)}>
       <p class="text-neutral-900">确定要为 <strong>{clientNameOrId(clientConfirmation.client)}</strong> 轮换密钥吗？</p>
-      <p class="mt-3 rounded-md border border-neutral-300 bg-neutral-100 p-3 text-sm text-neutral-900">
+      <p class="mt-3 rounded-lg border border-stone-200 bg-stone-100 p-3 text-sm text-neutral-900">
         旧密钥将立即失效。仍在使用旧密钥的服务会中断，直到完成配置更新
       </p>
       <ErrorText value={clientDialogError} />
@@ -313,7 +313,7 @@ export function OidcTab() {
     {clientConfirmation?.action === "delete" && <Modal title="删除 OIDC 应用"
       dismissDisabled={clientBusy} onClose={() => setClientConfirmation(null)}>
       <p class="text-neutral-900">删除后，使用此客户端的登录流程将立即停止，且无法恢复</p>
-      <div class="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-neutral-950">
+      <div class="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-neutral-950">
         <strong class="block">{clientNameOrId(clientConfirmation.client)}</strong>
         <code class="mt-1 block break-all">{clientConfirmation.client.client_id}</code>
       </div>
@@ -333,13 +333,13 @@ export function OidcTab() {
     {clientResult && <Modal title={clientResult.secret ? "保存客户端凭据" : "应用创建成功"}
       locked={Boolean(clientResult.secret)} onClose={() => setClientResult(null)}>
       <p class="text-neutral-900"><strong>{clientResult.clientName}</strong> 的客户端凭据如下</p>
-      {clientResult.secret && <p class="mt-3 rounded-md border border-neutral-300 bg-neutral-100 p-3 text-sm text-neutral-950">
+      {clientResult.secret && <p class="mt-3 rounded-lg border border-stone-200 bg-stone-100 p-3 text-sm text-neutral-950">
         客户端密钥仅显示这一次，关闭前请将它保存到安全的位置
       </p>}
       <dl class="mt-5 space-y-4">
         <div>
           <dt class="mb-1 text-sm">客户端 ID</dt>
-          <dd class="flex items-center gap-2 rounded-md border border-neutral-300 bg-neutral-100 p-3">
+          <dd class="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-100 p-3">
             <code class="min-w-0 flex-1 break-all text-sm text-neutral-950">{clientResult.clientId}</code>
             <button type="button" aria-label="复制客户端 ID" title="复制客户端 ID"
               class="shrink-0 rounded p-1.5 text-neutral-950 hover:bg-neutral-300"
@@ -350,7 +350,7 @@ export function OidcTab() {
         </div>
         {clientResult.secret && <div>
           <dt class="mb-1 text-sm">客户端密钥</dt>
-          <dd class="flex items-center gap-2 rounded-md border border-neutral-300 bg-neutral-100 p-3">
+          <dd class="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-100 p-3">
             <code class="min-w-0 flex-1 break-all text-sm text-neutral-950">{clientResult.secret}</code>
             <button type="button" aria-label="复制客户端密钥" title="复制客户端密钥"
               class="shrink-0 rounded p-1.5 text-neutral-950 hover:bg-neutral-300"
