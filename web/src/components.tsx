@@ -27,9 +27,8 @@ export function Layout({ title, children }: {
   children: ComponentChildren;
 }) {
   return <main class="flex min-h-[100dvh] flex-col items-center justify-center px-4 py-12">
-    <header class="mb-6 flex flex-col items-center gap-2.5">
-      <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-base font-bold text-white">N</span>
-      <span class="text-sm font-semibold tracking-tight text-stone-900">{__APP_NAME__}</span>
+    <header class="mb-6">
+      <span class="text-base font-semibold tracking-tight text-stone-900">{__APP_NAME__}</span>
     </header>
     <section class="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-card sm:p-8">
       <h1 class="mb-6 text-xl font-semibold tracking-tight text-stone-950">{title}</h1>
