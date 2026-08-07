@@ -169,7 +169,7 @@ export function ProfileTab({ session, onChanged }: { session: Session; onChanged
         <div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <strong class="text-sm text-red-900">注销账户</strong>
-            <p class="mt-1 text-xs text-red-700">永久删除账户、登录方式、会话、OIDC 应用和授权记录。</p>
+            <p class="mt-1 text-xs text-red-700">永久删除账户、登录方式、会话、OIDC 应用和授权记录</p>
           </div>
           <Button variant="danger" class="shrink-0"
             onClick={() => { setDeleteAccountConfirmation(""); setDeleteAccountOpen(true); }}>注销账户</Button>
@@ -179,7 +179,7 @@ export function ProfileTab({ session, onChanged }: { session: Session; onChanged
 
     {deleteAccountOpen && <Modal title="注销账户" compact dismissDisabled={deleteAccountBusy}
       onClose={() => setDeleteAccountOpen(false)}>
-      <p class="text-sm text-neutral-900">此操作不可恢复。重新注册会获得新的 OIDC sub。</p>
+      <p class="text-sm text-neutral-900">此操作不可恢复</p>
       <label htmlFor="delete_account_confirmation" class="mb-1 mt-4 block text-sm">输入 DELETE 确认</label>
       <input id="delete_account_confirmation" autofocus class="w-full" value={deleteAccountConfirmation}
         disabled={deleteAccountBusy} onInput={(event) => setDeleteAccountConfirmation(event.currentTarget.value)} />

@@ -22,11 +22,11 @@ export default function Console() {
   }
 
   if (!session) {
-    return <div class="flex min-h-[100dvh] items-center justify-center">
+    return <div class="flex min-h-dvh items-center justify-center">
       <p class="text-sm text-stone-400">加载中</p>
     </div>;
   }
-  return <div class="min-h-[100dvh]">
+  return <div class="min-h-dvh">
     <header class="sticky top-0 z-40 border-b border-stone-200/70 bg-white/85 backdrop-blur">
       <div class="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-4">
         <div class="flex min-w-0 items-center gap-6">

@@ -180,58 +180,58 @@ export function OidcTab() {
     </div>
 
     {clients.length ? <div class="mt-5 space-y-4">
-        {clients.map((client) => {
-          const confidential = isConfidentialClient(client);
-          return <article key={client.client_id}
-            class="rounded-xl border border-stone-200 bg-white p-5 shadow-card">
-            <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-center gap-2">
-                  <h3 class="text-base font-semibold text-stone-950">
-                    {clientNameOrId(client)}
-                  </h3>
-                  <span class="rounded-full border border-stone-200 bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700">
-                    {confidential ? "机密客户端" : "公开客户端"}
-                  </span>
-                  {client.pinned_user_id && <span class="rounded-full border border-stone-200 bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700">
-                    固定账户
-                  </span>}
+      {clients.map((client) => {
+        const confidential = isConfidentialClient(client);
+        return <article key={client.client_id}
+          class="rounded-xl border border-stone-200 bg-white p-5 shadow-card">
+          <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <h3 class="text-base font-semibold text-stone-950">
+                  {clientNameOrId(client)}
+                </h3>
+                <span class="rounded-full border border-stone-200 bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700">
+                  {confidential ? "机密客户端" : "公开客户端"}
+                </span>
+                {client.pinned_user_id && <span class="rounded-full border border-stone-200 bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700">
+                  固定账户
+                </span>}
+              </div>
+              <dl class="mt-4 space-y-4">
+                <div>
+                  <dt class="text-xs font-medium text-stone-500">客户端 ID</dt>
+                  <dd class="mt-1 break-all font-mono text-sm text-stone-900">{client.client_id}</dd>
                 </div>
-                <dl class="mt-4 space-y-4">
-                  <div>
-                    <dt class="text-xs font-medium text-stone-500">客户端 ID</dt>
-                    <dd class="mt-1 break-all font-mono text-sm text-stone-900">{client.client_id}</dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-medium text-stone-500">回调地址</dt>
-                    <dd class="mt-1 space-y-1">
-                      {client.redirect_uris?.map((uri) => <code key={uri}
-                        class="block break-all whitespace-normal text-sm text-stone-900">{uri}</code>)}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-              <div class="flex shrink-0 flex-wrap gap-2">
-                <Button onClick={() => openEditClient(client)}>编辑</Button>
-                {confidential && <Button
-                  onClick={() => {
-                    setClientDialogError("");
-                    setClientConfirmation({ action: "rotate", client });
-                  }}>轮换密钥</Button>}
-                <Button variant="danger"
-                  onClick={() => {
-                    setDeleteConfirmation("");
-                    setClientDialogError("");
-                    setClientConfirmation({ action: "delete", client });
-                  }}>删除</Button>
-              </div>
+                <div>
+                  <dt class="text-xs font-medium text-stone-500">回调地址</dt>
+                  <dd class="mt-1 space-y-1">
+                    {client.redirect_uris?.map((uri) => <code key={uri}
+                      class="block break-all whitespace-normal text-sm text-stone-900">{uri}</code>)}
+                  </dd>
+                </div>
+              </dl>
             </div>
-          </article>;
-        })}
-      </div> : <div class="mt-5 rounded-xl border border-dashed border-stone-300 bg-white/60 px-6 py-12 text-center">
-        <h3 class="text-sm font-semibold text-stone-900">还没有 OIDC 应用</h3>
-        <p class="mt-1 text-sm text-stone-500">创建一个应用以接入 OIDC 登录</p>
-      </div>}
+            <div class="flex shrink-0 flex-wrap gap-2">
+              <Button onClick={() => openEditClient(client)}>编辑</Button>
+              {confidential && <Button
+                onClick={() => {
+                  setClientDialogError("");
+                  setClientConfirmation({ action: "rotate", client });
+                }}>轮换密钥</Button>}
+              <Button variant="danger"
+                onClick={() => {
+                  setDeleteConfirmation("");
+                  setClientDialogError("");
+                  setClientConfirmation({ action: "delete", client });
+                }}>删除</Button>
+            </div>
+          </div>
+        </article>;
+      })}
+    </div> : <div class="mt-5 rounded-xl border border-dashed border-stone-300 bg-white/60 px-6 py-12 text-center">
+      <h3 class="text-sm font-semibold text-stone-900">还没有 OIDC 应用</h3>
+      <p class="mt-1 text-sm text-stone-500">创建一个应用以接入 OIDC 登录</p>
+    </div>}
 
     {clientDialog && <Modal title={clientDialog.mode === "create" ? "创建 OIDC 应用" : "编辑 OIDC 应用"}
       dismissDisabled={clientBusy} onClose={() => setClientDialog(null)}>

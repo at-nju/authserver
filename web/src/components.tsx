@@ -15,18 +15,17 @@ export function Button({ variant = "secondary", class: className, ...rest }:
 }
 
 export function tabButtonClass(active: boolean) {
-  return `-mb-px whitespace-nowrap border-b-2 px-1 pb-2 pt-1 text-sm font-medium transition-colors ${
-    active
-      ? "border-accent text-stone-950"
-      : "border-transparent text-stone-500 hover:border-stone-300 hover:text-stone-800"
-  }`;
+  return `-mb-px whitespace-nowrap border-b-2 px-1 pb-2 pt-1 text-sm font-medium transition-colors ${active
+    ? "border-accent text-stone-950"
+    : "border-transparent text-stone-500 hover:border-stone-300 hover:text-stone-800"
+    }`;
 }
 
 export function Layout({ title, children }: {
   title: string;
   children: ComponentChildren;
 }) {
-  return <main class="flex min-h-[100dvh] flex-col items-center justify-center px-4 py-12">
+  return <main class="flex min-h-dvh flex-col items-center justify-center px-4 py-12">
     <header class="mb-6">
       <span class="text-base font-semibold tracking-tight text-stone-900">{__APP_NAME__}</span>
     </header>
