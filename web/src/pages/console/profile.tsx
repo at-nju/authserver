@@ -111,66 +111,71 @@ export function ProfileTab({ session, onChanged }: { session: Session; onChanged
   }
 
   return <>
-    {notice && <p class="w-full rounded px-3 py-2 my-2 border border-neutral-300 bg-neutral-100">{notice}</p>}
+    {notice && <p class="mb-4 w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</p>}
     <ErrorText value={error} />
-    <section><h2 class="mt-2 mb-4 font-semibold text-2xl">个人资料</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="name_field" class="text-sm">昵称</label>
-          <div class="mt-1 flex items-center justify-between gap-2">
-            <input id="name_field" class="w-full" value={name}
-              onInput={(event) => setName(event.currentTarget.value)} />
-            <Button variant="neutral" class="shrink-0" onClick={saveName}>保存昵称</Button>
+    <div class="space-y-5">
+      <section class="rounded-xl border border-stone-200 bg-white p-6 shadow-card">
+        <h2 class="text-base font-semibold tracking-tight text-stone-950">个人资料</h2>
+        <div class="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div>
+            <label htmlFor="name_field" class="mb-1.5 block text-sm font-medium text-stone-700">昵称</label>
+            <div class="flex items-center gap-2">
+              <input id="name_field" class="min-w-0 flex-1" value={name}
+                onInput={(event) => setName(event.currentTarget.value)} />
+              <Button variant="neutral" class="shrink-0" onClick={saveName}>保存昵称</Button>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="email_field" class="mb-1.5 block text-sm font-medium text-stone-700">邮箱</label>
+            <div class="flex items-center gap-2">
+              <input id="email_field" class="min-w-0 flex-1" type="email" value={email} disabled={emailBusy}
+                onInput={(event) => setEmail(event.currentTarget.value)} />
+              <Button variant="neutral" class="shrink-0" onClick={requestEmailChange} disabled={emailBusy}>修改邮箱</Button>
+            </div>
+            <p class={`mt-1.5 flex items-center gap-1.5 text-xs ${session.user.emailVerified ? "text-stone-500" : "text-amber-600"}`}>
+              <span class={`inline-block h-1.5 w-1.5 rounded-full ${session.user.emailVerified ? "bg-emerald-500" : "bg-amber-500"}`} />
+              {session.user.emailVerified ? "已验证" : "未验证"}
+            </p>
           </div>
         </div>
-        <div>
-          <label htmlFor="email_field" class="text-sm">邮箱</label>
-          <div class="mt-1 flex items-center justify-between gap-2">
-            <input id="email_field" class="w-full" type="email" value={email} disabled={emailBusy}
-              onInput={(event) => setEmail(event.currentTarget.value)} />
-            <Button variant="neutral" class="shrink-0" onClick={requestEmailChange} disabled={emailBusy}>修改邮箱</Button>
-          </div>
-          <small class="text-sm text-neutral-400">
-            {session.user.emailVerified ? "已验证" : "未验证"}</small>
-        </div>
-      </div>
-    </section>
-    <section class="mt-6">
-      <h2 class="mb-4 font-semibold text-2xl">登录方式</h2>
-      <div class="space-y-2">
-        {accounts.map((account) => <div key={`${account.providerId}:${account.accountId}`}
-          class="flex items-center justify-between gap-3 rounded-md border border-neutral-300 p-3">
-          <div class="min-w-0">
-            <strong class="block text-sm">{account.providerId}</strong>
-            <span class="block truncate text-xs text-neutral-500">{account.accountId}</span>
-          </div>
-          {account.providerId !== "email" && <button type="button" class="text-sm text-red-700"
-            onClick={() => unlinkAccount(account)}>解绑</button>}
-        </div>)}
-      </div>
-      {config.providers.seatable.enabled && !accounts.some((account) => account.providerId === "seatable") &&
-        <form class="mt-3 flex gap-2" onSubmit={linkSeaTable}>
-          <input class="min-w-0 flex-1" type="password" required placeholder="SeaTable Token"
-            value={linkToken} onInput={(event) => setLinkToken(event.currentTarget.value)} />
-          <Button variant="neutral">绑定</Button>
-        </form>}
-      <div class="mt-3 flex flex-wrap gap-2">
+      </section>
+      <section class="rounded-xl border border-stone-200 bg-white p-6 shadow-card">
+        <h2 class="text-base font-semibold tracking-tight text-stone-950">登录方式</h2>
+        {accounts.length > 0 && <div class="mt-4 divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200">
+          {accounts.map((account) => <div key={`${account.providerId}:${account.accountId}`}
+            class="flex items-center justify-between gap-3 px-4 py-3">
+            <div class="min-w-0">
+              <strong class="block text-sm text-stone-900">{account.providerId}</strong>
+              <span class="block truncate font-mono text-xs text-stone-500">{account.accountId}</span>
+            </div>
+            {account.providerId !== "email" && <button type="button" class="shrink-0 text-sm text-red-600 hover:text-red-700"
+              onClick={() => unlinkAccount(account)}>解绑</button>}
+          </div>)}
+        </div>}
+        {config.providers.seatable.enabled && !accounts.some((account) => account.providerId === "seatable") &&
+          <form class="mt-4 flex gap-2" onSubmit={linkSeaTable}>
+            <input class="min-w-0 flex-1" type="password" required placeholder="SeaTable Token"
+              value={linkToken} onInput={(event) => setLinkToken(event.currentTarget.value)} />
+            <Button variant="neutral" class="shrink-0">绑定</Button>
+          </form>}
         {config.providers.discourse.enabled && !accounts.some((account) => account.providerId === "discourse") &&
-          <a class="rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm"
-            href="/accounts/link/discourse?return_to=%2Fconsole">绑定 Discourse</a>}
-      </div>
-    </section>
-    <section class="mt-8 border-t border-red-200 pt-6">
-      <h2 class="font-semibold text-2xl text-red-800">危险操作</h2>
-      <div class="mt-4 flex items-center justify-between gap-4 rounded-md border border-red-300 bg-red-50 p-4">
-        <div>
-          <strong class="text-sm text-red-900">注销账户</strong>
-          <p class="mt-1 text-xs text-red-800">永久删除账户、登录方式、会话、OIDC 应用和授权记录。</p>
+          <div class="mt-3">
+            <a class="inline-flex items-center rounded-lg border border-stone-200 bg-stone-100 px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-200"
+              href="/accounts/link/discourse?return_to=%2Fconsole">绑定 Discourse</a>
+          </div>}
+      </section>
+      <section class="rounded-xl border border-red-200 bg-red-50/60 p-6">
+        <h2 class="text-base font-semibold tracking-tight text-red-800">危险操作</h2>
+        <div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <strong class="text-sm text-red-900">注销账户</strong>
+            <p class="mt-1 text-xs text-red-700">永久删除账户、登录方式、会话、OIDC 应用和授权记录。</p>
+          </div>
+          <Button variant="danger" class="shrink-0"
+            onClick={() => { setDeleteAccountConfirmation(""); setDeleteAccountOpen(true); }}>注销账户</Button>
         </div>
-        <Button variant="danger" class="shrink-0"
-          onClick={() => { setDeleteAccountConfirmation(""); setDeleteAccountOpen(true); }}>注销账户</Button>
-      </div>
-    </section>
+      </section>
+    </div>
 
     {deleteAccountOpen && <Modal title="注销账户" compact dismissDisabled={deleteAccountBusy}
       onClose={() => setDeleteAccountOpen(false)}>
