@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { request, useSession } from "../api";
-import { Layout, tabButtonClass } from "../components";
+import { tabButtonClass } from "../components";
 import { OidcTab } from "./console/oidc";
 import { ProfileTab } from "./console/profile";
 
@@ -22,22 +22,34 @@ export default function Console() {
     location.replace("/login");
   }
 
-  if (!session) return <Layout title="控制台"><p>加载中</p></Layout>;
-  return <Layout title="控制台" wide>
-    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex gap-1 rounded-lg border border-neutral-300 bg-neutral-200/60 p-1"
-        role="tablist" aria-label="控制台">
-        <button type="button" role="tab" aria-selected={tab === "profile"}
-          class={tabButtonClass(tab === "profile")}
-          onClick={() => { location.hash = "profile"; }}>资料</button>
-        <button type="button" role="tab" aria-selected={tab === "oidc"}
-          class={tabButtonClass(tab === "oidc")}
-          onClick={() => { location.hash = "oidc"; }}>OIDC 应用</button>
+  if (!session) {
+    return <div class="flex min-h-[100dvh] items-center justify-center">
+      <p class="text-sm text-stone-400">加载中</p>
+    </div>;
+  }
+  return <div class="min-h-[100dvh]">
+    <header class="sticky top-0 z-40 border-b border-stone-200/70 bg-white/85 backdrop-blur">
+      <div class="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-4">
+        <div class="flex min-w-0 items-center gap-5">
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent text-xs font-bold text-white">N</span>
+          <div class="flex gap-1 rounded-lg border border-stone-200 bg-stone-100 p-1"
+            role="tablist" aria-label="控制台">
+            <button type="button" role="tab" aria-selected={tab === "profile"}
+              class={tabButtonClass(tab === "profile")}
+              onClick={() => { location.hash = "profile"; }}>资料</button>
+            <button type="button" role="tab" aria-selected={tab === "oidc"}
+              class={tabButtonClass(tab === "oidc")}
+              onClick={() => { location.hash = "oidc"; }}>OIDC 应用</button>
+          </div>
+        </div>
+        <button class="text-sm text-stone-500 transition-colors hover:text-stone-900"
+          onClick={logout}>退出</button>
       </div>
-      <button class="text-blue-500 hover:text-blue-700" onClick={logout}>退出</button>
-    </div>
-    {tab === "profile"
-      ? <ProfileTab session={session} onChanged={() => setRevision((value) => value + 1)} />
-      : <OidcTab />}
-  </Layout>;
+    </header>
+    <main class="mx-auto w-full max-w-5xl px-4 py-8">
+      {tab === "profile"
+        ? <ProfileTab session={session} onChanged={() => setRevision((value) => value + 1)} />
+        : <OidcTab />}
+    </main>
+  </div>;
 }

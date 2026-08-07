@@ -3,10 +3,10 @@ import { useEffect } from "preact/hooks";
 
 export type ButtonVariant = "primary" | "secondary" | "neutral" | "danger";
 const buttonStyles: Record<ButtonVariant, string> = {
-  primary: "rounded-md border border-neutral-900 bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200",
-  secondary: "rounded-md border border-neutral-400 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100",
-  neutral: "rounded-md border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-sm hover:bg-neutral-200",
-  danger: "rounded-md border border-red-800 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50",
+  primary: "rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-strong active:scale-[0.98]",
+  secondary: "rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-800 shadow-sm transition-colors hover:bg-stone-50 active:scale-[0.98]",
+  neutral: "rounded-lg border border-stone-200 bg-stone-100 px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-200 active:scale-[0.98]",
+  danger: "rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm transition-colors hover:bg-red-50 active:scale-[0.98]",
 };
 
 export function Button({ variant = "secondary", class: className, ...rest }:
@@ -15,35 +15,35 @@ export function Button({ variant = "secondary", class: className, ...rest }:
 }
 
 export function tabButtonClass(active: boolean) {
-  return `flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+  return `flex-1 whitespace-nowrap rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
     active
-      ? "border border-neutral-300 bg-white text-neutral-950 shadow-sm"
-      : "border border-transparent text-neutral-600 hover:text-neutral-950"
+      ? "bg-white text-stone-950 shadow-sm"
+      : "text-stone-600 hover:text-stone-950"
   }`;
 }
 
-export function Layout({ title, children, wide = false }: {
+export function Layout({ title, children }: {
   title: string;
   children: ComponentChildren;
-  wide?: boolean;
 }) {
-  return <main class={`mx-auto px-4 ${wide ? "mt-[6vh] max-w-4xl" : "mt-[20vh] max-w-lg"}`}>
-    <header class="ml-2 mb-1 font-semibold text-neutral-500">{__APP_NAME__}</header>
-    <section class="rounded-xl border border-neutral-300 bg-white p-6 shadow">
-      <h1 class="mb-4 text-xl font-bold">{title}</h1>
+  return <main class="flex min-h-[100dvh] flex-col items-center justify-center px-4 py-12">
+    <header class="mb-6 flex flex-col items-center gap-2.5">
+      <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-base font-bold text-white">N</span>
+      <span class="text-sm font-semibold tracking-tight text-stone-900">{__APP_NAME__}</span>
+    </header>
+    <section class="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-card sm:p-8">
+      <h1 class="mb-6 text-xl font-semibold tracking-tight text-stone-950">{title}</h1>
       {children}
     </section>
-    <footer class="mr-2 mt-2 mb-6 text-right text-sm text-neutral-500">
-      <a href="https://github.com/at-nju/authserver"
-        target="_blank" rel="noopener noreferrer">本项目 </a>以
-      <a href="https://github.com/at-nju/authserver/blob/main/LICENSE"
-        target="_blank" rel="noopener noreferrer"> GPL-3.0 </a>许可证发布
+    <footer class="mt-6 text-center text-xs text-stone-400">
+      <a href="https://github.com/at-nju/authserver" target="_blank" rel="noopener noreferrer">本项目</a> 以
+      <a href="https://github.com/at-nju/authserver/blob/main/LICENSE" target="_blank" rel="noopener noreferrer"> GPL-3.0 </a>许可证发布
     </footer>
   </main>;
 }
 
 export function ErrorText({ value }: { value: string }) {
-  return value ? <p class="w-full rounded px-3 py-2 my-2 border border-red-300 bg-red-100 text-red-800">{value}</p> : null;
+  return value ? <p class="my-2 w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{value}</p> : null;
 }
 
 export function CopyIcon({ copied = false }: { copied?: boolean }) {
@@ -81,16 +81,17 @@ export function Modal({ title, children, onClose, locked = false, dismissDisable
     };
   }, [dismissDisabled, locked, onClose]);
 
-  return <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+  return <div class="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 p-4 backdrop-blur-[2px]"
     onMouseDown={(event) => {
       if (!locked && !dismissDisabled && event.target === event.currentTarget) onClose();
     }}>
     <section role="dialog" aria-modal="true" aria-label={title}
-      class={`max-h-[90vh] w-full overflow-y-auto rounded-xl border border-neutral-400 bg-white p-5 shadow-xl ${compact ? "max-w-md" : "max-w-2xl"}`}>
+      class={`max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-stone-200 bg-white p-6 shadow-modal ${compact ? "max-w-md" : "max-w-2xl"}`}>
       <header class="mb-5 flex items-start justify-between gap-4">
-        <h3 class="text-xl font-semibold text-neutral-950">{title}</h3>
+        <h3 class="text-lg font-semibold tracking-tight text-stone-950">{title}</h3>
         {!locked && <button type="button" aria-label="关闭" title="关闭"
-          class="p-2" disabled={dismissDisabled}
+          class="-mr-1 rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+          disabled={dismissDisabled}
           onClick={onClose}><CloseIcon /></button>}
       </header>
       {children}
@@ -108,14 +109,16 @@ export function EmailVerificationModal({ email, otp, busy, error, onOtpInput, on
   onSubmit: (event: Event) => void;
 }) {
   return <Modal title="验证邮箱" compact dismissDisabled={busy} onClose={onClose}>
-    <p class="text-sm text-neutral-700">验证码已发送至</p>
-    <strong class="mt-1 block break-all text-neutral-950">{email}</strong>
+    <p class="text-sm text-stone-600">验证码已发送至</p>
+    <strong class="mt-1 block break-all text-stone-950">{email}</strong>
     <form class="mt-5" onSubmit={onSubmit}>
-      <fieldset disabled={busy}>
-        <label htmlFor="email_otp_field" class="mb-1 block text-sm">验证码</label>
-        <input id="email_otp_field" required autofocus class="w-full" inputMode="numeric"
-          autocomplete="one-time-code" maxLength={6} value={otp}
-          onInput={(event) => onOtpInput(event.currentTarget.value)} />
+      <fieldset disabled={busy} class="space-y-4">
+        <div>
+          <label htmlFor="email_otp_field" class="mb-1.5 block text-sm font-medium text-stone-700">验证码</label>
+          <input id="email_otp_field" required autofocus class="w-full" inputMode="numeric"
+            autocomplete="one-time-code" maxLength={6} value={otp}
+            onInput={(event) => onOtpInput(event.currentTarget.value)} />
+        </div>
         <ErrorText value={error} />
         <div class="mt-5 flex justify-end gap-2">
           <Button onClick={onClose}>取消</Button>
