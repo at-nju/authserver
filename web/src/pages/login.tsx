@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import { config } from "../../../config";
 import { oauthQuery, providerReturnTo, request } from "../api";
-import { Button, ErrorText, Layout } from "../components";
+import { Button, ErrorText, Layout, tabButtonClass } from "../components";
 
 type LoginMethod = "token" | "email";
 
@@ -69,9 +69,9 @@ export default function Login() {
   return <Layout title="登录">
     {showTabs && <div class="mb-5 flex gap-1 rounded-lg border border-neutral-300 bg-neutral-200/60 p-1"
       role="tablist" aria-label="登录方式">
-      <button type="button" role="tab" aria-selected={active === "token"} class={tabClass(active === "token")}
+      <button type="button" role="tab" aria-selected={active === "token"} class={tabButtonClass(active === "token")}
         onClick={() => switchMethod("token")}>Token 登录</button>
-      <button type="button" role="tab" aria-selected={active === "email"} class={tabClass(active === "email")}
+      <button type="button" role="tab" aria-selected={active === "email"} class={tabButtonClass(active === "email")}
         onClick={() => switchMethod("email")}>邮箱登录</button>
     </div>}
     {active === "email" && emailEnabled && <form onSubmit={emailSent ? signInEmail : sendEmailOtp}>
@@ -112,12 +112,4 @@ export default function Login() {
       </a>
     </div>}
   </Layout>;
-}
-
-function tabClass(active: boolean) {
-  return `flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-    active
-      ? "border border-neutral-300 bg-white text-neutral-950 shadow-sm"
-      : "border border-transparent text-neutral-600 hover:text-neutral-950"
-  }`;
 }

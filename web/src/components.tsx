@@ -14,6 +14,14 @@ export function Button({ variant = "secondary", class: className, ...rest }:
   return <button class={`${buttonStyles[variant]}${className ? ` ${className}` : ""}`} {...rest} />;
 }
 
+export function tabButtonClass(active: boolean) {
+  return `flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+    active
+      ? "border border-neutral-300 bg-white text-neutral-950 shadow-sm"
+      : "border border-transparent text-neutral-600 hover:text-neutral-950"
+  }`;
+}
+
 export function Layout({ title, children, wide = false }: {
   title: string;
   children: ComponentChildren;
